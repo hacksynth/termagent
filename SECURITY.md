@@ -53,6 +53,15 @@ point of the app; they are documented rather than fixed.
    readable by other apps. They are *not* encrypted at rest.
    Physical access to a rooted/unlocked device means key compromise.
 
+   They are, however, **excluded from every backup and transfer path**:
+   `android:allowBackup="false"` plus an empty `res/xml/data_extraction_rules.xml`
+   covering both `<cloud-backup>` and `<device-transfer>`. Without that, the keys —
+   and the unpacked `$PREFIX`, and every file the agent ever wrote — would be copied
+   into an ADB backup, a Google Drive backup, or a device-to-device transfer, i.e.
+   outside the app sandbox. This is a deliberate choice: nothing in this app is
+   worth restoring that cannot be recreated by re-installing (the bootstrap ships
+   inside the APK).
+
 3. **`targetSdk = 28`.**
    This is required for `exec()` of the bootstrap binaries (see the README) and it
    also means the app opts out of several modern platform hardening behaviours and
@@ -88,6 +97,10 @@ point of the app; they are documented rather than fixed.
   that can trigger shell execution or read credentials. (Note `allowBackup`-related
   data extraction is in scope: `tools:ignore`/`android:allowBackup` should not
   silently ship your keys to a backup.)
+* A **foreground service or wake lock that outlives the turn** it was started for,
+  or that is left running with no visible notification. `AgentForegroundService`
+  exists only while a turn is executing, is `android:exported="false"`, shows an
+  ongoing notification, and releases its wake lock in both `onDestroy` and `stop`.
 * Escaping the app's private prefix during extraction/installation (path traversal
   in the bootstrap unpack or the `.deb` repoint hook).
 * Leaking the API key to an endpoint other than the configured one, or to logs.
@@ -100,5 +113,6 @@ point of the app; they are documented rather than fixed.
 * Use a **scoped/limited API key** with a spending cap; keys are stored in plaintext.
 * Prefer building the APK yourself from source (`scripts/build-on-termux.sh`) over
   installing a random prebuilt.
-* Turn on the Android backup exclusion if you do not want your provider keys leaving
-  the device.
+* Backups are already off (`allowBackup="false"` and an empty
+  `data_extraction_rules.xml`), so provider keys do not leave the device through a
+  backup. Nothing needs to be turned on — this is the default.

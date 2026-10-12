@@ -5,12 +5,32 @@
     <!-- Agent talks to an OpenAI-compatible endpoint; shell backend needs no network. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!--
+        Both are used by AgentForegroundService, which is started for the duration of a turn:
+        a turn can run a command for minutes, and a backgrounded process would otherwise be frozen
+        (which suspends the timers the command capture depends on) or killed outright.
+    -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 
+    <!--
+        `allowBackup` is deliberately FALSE.
+
+        The app's settings hold provider API keys in plain SharedPreferences (see SECURITY.md), and
+        its private storage holds the whole unpacked Termux `$PREFIX` — hundreds of megabytes of
+        binaries and package metadata, plus the user's shell history and any file the agent wrote.
+        Neither belongs in an ADB backup, a cloud backup, or a device-to-device transfer: the backup
+        file leaves the app's sandbox and can be read off the wire.
+
+        `dataExtractionRules` (below, API 31+) states the same for the newer backup/transfer paths.
+        The trade-off is accepted on purpose: there is no app data worth restoring that the user
+        cannot recreate by re-installing the bootstrap (which ships inside the APK).
+    -->
     <application
         android:name=".TermAgentApp"
-        android:allowBackup="true"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:enableOnBackInvokedCallback="true"
         android:extractNativeLibs="true"
         android:icon="@mipmap/ic_launcher"
@@ -43,6 +63,18 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+            Lifetime marker for one agent turn: keeps the process unfrozen and the CPU awake while a
+            command is running, so a long `apt install` survives the user switching apps.
+            Not exported (nothing outside the app can start it) and not sticky (a turn cannot be
+            resumed across process death). See AgentForegroundService.
+        -->
+        <service
+            android:name=".agent.AgentForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"
+            tools:targetApi="q" />
     </application>
 
 </manifest>

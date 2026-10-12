@@ -3,6 +3,7 @@ package com.termagent.shell
 import android.content.Context
 import android.util.Log
 import com.termux.terminal.TerminalSession
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.sync.Mutex
@@ -15,6 +16,15 @@ data class ShellResult(
     val exitCode: Int,
     val output: String,
     val timedOut: Boolean = false,
+    /**
+     * True when [output] had its middle dropped because the command produced more than the
+     * [ShellManager] output cap allows.
+     *
+     * Carried explicitly (rather than being re-detected from the "[N characters omitted]" marker in
+     * the text) because the marker is *data the command may itself have printed* — a program that
+     * writes that exact sentence would otherwise look like a truncated capture.
+     */
+    val truncated: Boolean = false,
 ) {
     val isSuccess: Boolean get() = exitCode == 0 && !timedOut
 }
@@ -48,6 +58,18 @@ data class ShellResult(
  *
  * The command runs in the *current* shell (not a subshell), so `cd`, `export` and
  * `alias` persist across calls.
+ *
+ * ### Output is bounded
+ * What the model receives is capped at [OUTPUT_HEAD_CHARS] + [OUTPUT_TAIL_CHARS] characters by
+ * [OutputAccumulator]; the middle is replaced by a marker that says how much was dropped. The
+ * streamed `onChunk` slices stay verbatim, because the terminal card is a live view, but the UI
+ * keeps its own bounded window.
+ *
+ * ### Cancellation interrupts the job
+ * Cancelling [exec] (Stop, or switching conversations) does not kill the child process — it is
+ * still running in the PTY. The cancellation path therefore sends Ctrl-C immediately and flags the
+ * shell for prompt recovery, so the next command neither inherits this one's output nor has its
+ * snippet typed into a still-running program's stdin.
  *
  * ### Why the raw byte stream and not the emulator's screen
  * An earlier version derived the output from `TerminalBuffer.getTranscriptTextWithFullLinesJoined()`
@@ -257,10 +279,26 @@ class ShellManager(
                 Log.w(TAG, "Command exceeded ${budget}ms; interrupting")
                 sendInterrupt()
                 needsRecovery = true
-                ShellResult(TIMEOUT_EXIT_CODE, execution.buffer.toString(), timedOut = true)
+                ShellResult(
+                    TIMEOUT_EXIT_CODE,
+                    execution.output.toString(),
+                    timedOut = true,
+                    truncated = execution.output.isTruncated,
+                )
             } else {
                 completed
             }
+        } catch (cancellation: CancellationException) {
+            // The turn was cancelled — the user pressed Stop, or switched conversations. The
+            // *suspend point* is gone, but the child process is not: the PTY is still running the
+            // command. Left alone it keeps producing output (which the next command's capture would
+            // scan as its own, since the marker scan is positional) and, worse, the next command's
+            // snippet would be typed straight into it as stdin. Interrupt it, and mark the shell as
+            // needing the prompt resynchronised before the next command.
+            Log.i(TAG, "Command cancelled; interrupting the foreground job")
+            sendInterrupt()
+            needsRecovery = true
+            throw cancellation
         } finally {
             pending = null
             if (!execution.completion.isCompleted) execution.completion.cancel()
@@ -282,8 +320,14 @@ class ShellManager(
         /** Scanner over the raw byte stream — see [CommandCapture]. */
         val capture = CommandCapture(beginMarker, endMarker)
 
-        /** Everything captured so far; what the model ultimately receives. */
-        val buffer = StringBuilder()
+        /**
+         * Everything captured so far; what the model ultimately receives.
+         *
+         * Bounded: a command's output is unbounded (`yes`, a build log, `base64` of a file) and goes
+         * into the tool message verbatim, so an unbounded buffer would blow both the memory budget
+         * and the model's context window — see [OutputAccumulator].
+         */
+        val output = OutputAccumulator(OUTPUT_HEAD_CHARS, OUTPUT_TAIL_CHARS)
 
         val completion = CompletableDeferred<ShellResult>()
     }
@@ -356,14 +400,20 @@ class ShellManager(
     private fun consume(execution: PendingExecution, text: String) {
         val chunk = execution.capture.accept(text)
         if (chunk.isNotEmpty()) {
-            execution.buffer.append(chunk)
+            execution.output.append(chunk)
             execution.onChunk(chunk)
         }
 
         // Non-null exit status means the end marker was found: the command is finished.
         val exitCode = execution.capture.exitCode
         if (exitCode != null && !execution.completion.isCompleted) {
-            execution.completion.complete(ShellResult(exitCode, execution.buffer.toString()))
+            execution.completion.complete(
+                ShellResult(
+                    exitCode,
+                    execution.output.toString(),
+                    truncated = execution.output.isTruncated,
+                ),
+            )
         }
 
     }
@@ -398,6 +448,19 @@ class ShellManager(
          * more than this should be run as a background job (`nohup … &`) instead.
          */
         const val MAX_TIMEOUT_MS = 600_000L
+
+        /**
+         * Output kept for the model: the first [OUTPUT_HEAD_CHARS] and the last [OUTPUT_TAIL_CHARS]
+         * characters (~128 KB in total), with the middle replaced by an explicit omission marker.
+         *
+         * A command's output is unbounded (`yes`, a build log, `base64` of a file) and is handed to
+         * the model verbatim as a tool message, so without a cap one `cat` of a large file is enough
+         * to exceed the model's context window — and the bill. The head keeps the beginning and the
+         * tail keeps the verdict (a compiler's or a package manager's last lines), which is the part
+         * that usually decides what the agent does next.
+         */
+        private const val OUTPUT_HEAD_CHARS = 64_000
+        private const val OUTPUT_TAIL_CHARS = 64_000
 
         /** Scrollback depth; Termux's own default is 2000. */
         private const val TRANSCRIPT_ROWS = 2000

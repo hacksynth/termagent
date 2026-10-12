@@ -10,6 +10,7 @@ import com.termagent.AppContainer
 import com.termagent.R
 import com.termagent.TermAgentApp
 import com.termagent.agent.AgentEvent
+import com.termagent.agent.AgentForegroundService
 import com.termagent.agent.ApiConfig
 import com.termagent.agent.ChatMessage
 import com.termagent.agent.FunctionCall
@@ -29,6 +30,7 @@ import com.termagent.data.ToolStatus
 import com.termagent.provider.ModelCatalog
 import com.termagent.provider.ModelDiscovery
 import com.termagent.provider.ProviderRegistry
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -424,6 +426,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
         streamingEntryId = assistantEntryId
 
+        // Hold a foreground service (and a partial wake lock) for the duration of the turn.
+        //
+        // A turn can legitimately run for minutes (`apt install`, a build, a test suite). Without
+        // this, backgrounding the app lets Android's cached-app freezer suspend the timers the
+        // command capture depends on, and the process can be killed outright mid-turn — which is
+        // exactly the failure the ShellManager KDoc describes as a 55-minute apparent hang.
+        AgentForegroundService.start(getApplication<Application>())
+
         turnJob = viewModelScope.launch {
             try {
                 val history = buildApiHistory(historySource)
@@ -432,6 +442,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 container.engine
                     .run(config, history, allowCommandExecution = _state.value.allowCommandExecution)
                     .collect { event -> handleEvent(event, assistantEntryId) }
+            } catch (cancellation: CancellationException) {
+                // Stopping a turn (or switching conversations) cancels this coroutine. That is a
+                // deliberate user action, not a failure, so it must not surface as one: this used to
+                // fall into the `Throwable` branch below and pop a red "Job was cancelled" bar every
+                // time Stop was pressed. The shell's own cancellation handler has already sent
+                // Ctrl-C to the foreground job.
+                Log.i(TAG, "Turn cancelled")
+                throw cancellation
             } catch (t: Throwable) {
                 Log.e(TAG, "Turn failed", t)
                 _state.update { it.copy(error = t.message ?: t.javaClass.simpleName) }
@@ -440,6 +458,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 _state.update { it.copy(isStreaming = false) }
                 streamingEntryId = null
                 turnJob = null
+                // The turn is over, so the process no longer needs to be kept awake.
+                AgentForegroundService.stop(getApplication())
                 persist()
             }
         }
@@ -497,14 +517,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             )
 
             is AgentEvent.ToolOutput -> updateTerminal(event.toolCallId) { block ->
-                block.copy(output = block.output + event.chunk)
+                block.copy(output = capTerminalOutput(block.output + event.chunk))
             }
 
             is AgentEvent.ToolFinished -> updateTerminal(event.toolCallId) { block ->
                 block.copy(
                     output = block.output.ifEmpty { event.result },
                     result = event.result,
-                    exitCode = parseExitCode(event.result),
+                    exitCode = event.exitCode,
                     status = if (event.isError) ToolStatus.Failed else ToolStatus.Succeeded,
                 )
             }
@@ -778,10 +798,33 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         if (target.entries.isEmpty() && target.title.isBlank()) return
         lastPersistAt = System.currentTimeMillis()
         viewModelScope.launch {
-            runCatching { container.repository.save(_state.value.current ?: target) }
+            // Save *target*, never `_state.value.current`: the default argument is evaluated at the
+            // call site, so the two are normally the same conversation — but if the state moved on
+            // between the call and this coroutine running (the user switched, deleted or cleared a
+            // conversation), writing `current` would silently skip the conversation that was asked
+            // for, and the edit that prompted the save would be lost.
+            runCatching { container.repository.save(target) }
                 .onFailure { Log.w(TAG, "Failed to persist conversation ${target.id}", it) }
         }
     }
+
+    /**
+     * Bound the output a terminal card keeps, in memory and on disk.
+     *
+     * The card is a live terminal view, so the *tail* is the part worth keeping; the model's copy of
+     * the same command's output is capped separately by
+     * [com.termagent.shell.OutputAccumulator]. Streamed chunks arrive verbatim, and the card's output
+     * is persisted with the conversation, so without a cap a single `yes`-shaped command would grow
+     * the saved JSON — and the in-memory conversation — without bound.
+     */
+    private fun capTerminalOutput(text: String): String =
+        if (text.length <= MAX_TERMINAL_OUTPUT_CHARS) {
+            text
+        } else {
+            // A bare ellipsis rather than a sentence: this is spliced into monospace command output,
+            // which is content, not UI chrome, and must not carry language-specific prose.
+            "\u2026\n" + text.takeLast(MAX_TERMINAL_OUTPUT_CHARS)
+        }
 
     /**
      * Write the open conversation out while a turn is still streaming, at most every
@@ -886,10 +929,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         return trimmed.dropWhile { it.role != ChatMessage.ROLE_USER }
     }
 
-    /** Scrollback can contain a non-zero trailing status; `run_shell` reports it directly. */
-    private fun parseExitCode(result: String): Int? =
-        EXIT_CODE_REGEX.find(result)?.groupValues?.getOrNull(1)?.toIntOrNull()
-
     private fun List<Conversation>.replace(updated: Conversation): List<Conversation> =
         map { if (it.id == updated.id) updated else it }
             .sortedByDescending { it.updatedAt }
@@ -913,6 +952,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
          */
         const val PERSIST_INTERVAL_MS = 1_000L
 
-        val EXIT_CODE_REGEX = Regex("exit_code:\\s*(-?\\d+)")
+        /**
+         * Upper bound on the output a single terminal card retains, in characters (~128 KB).
+         *
+         * Keeper of the *tail*: this is what the user watches and what a re-opened conversation
+         * shows. The model receives a separately capped copy (see
+         * [com.termagent.shell.OutputAccumulator]), so the two limits are independent on purpose —
+         * the card is a terminal view, not the tool result.
+         */
+        const val MAX_TERMINAL_OUTPUT_CHARS = 128_000
     }
 }

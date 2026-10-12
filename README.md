@@ -101,7 +101,8 @@ app/                         # the UI + agent (Kotlin, Compose, Miuix)
 │   └── ModelDiscovery.kt    # GET {baseUrl}/models for the model picker
 ├── ui/
 │   ├── ChatViewModel.kt     # orchestration + API-history reconstruction
-│   ├── components/          # TerminalCard, MessageBubble, Composer, SessionDrawer, EmbeddedTerminal
+│   ├── components/          # Markdown (parser + renderer), TerminalCard, ToolAction,
+│   │                        # MessageBubble, Composer, SessionDrawer, EmbeddedTerminal
 │   ├── screens/             # ChatScreen, SettingsScreen
 │   └── theme/Theme.kt       # Miuix theme + the shell palette
 └── MainActivity.kt          # single-activity host, drawer + surfaces
@@ -126,8 +127,9 @@ CHANGELOG.md                 # Keep a Changelog
 2. `ChatViewModel` stores the user message and calls `AgentEngine.run(history)`.
 3. `LlmClient` streams the completion. Text deltas render immediately (bubble + blinking cursor).
 4. The model returns a **tool call**: `run_shell {command: "ls -la ~"}`.
-5. `ShellManager` writes `ls -la ~` into the **persistent PTY** and derives the output from the
-   emulator's scrollback. Every new slice is emitted as `AgentEvent.ToolOutput`.
+5. `ShellManager` writes `ls -la ~` into the **persistent PTY** and captures the output from the
+   **raw byte stream** (not the rendered screen — see [How output is captured](#how-output-is-captured)).
+   Every new slice is emitted as `AgentEvent.ToolOutput`.
 6. The UI appends those slices to a **terminal card**, which auto-scrolls like a real terminal.
    Its header names the action — `→ Run: ls -la ~`, `→ Read /path/to/file` — rather than
    echoing the arguments, following the `devx` CLI's convention.
@@ -186,6 +188,41 @@ Two details make the parsing robust:
 Because the command runs in the **current** shell (not a subshell), `cd`, `export` and
 `alias` persist between turns. A timed-out command is interrupted with Ctrl-C and the prompt
 is resynchronised before the next call.
+
+### Bounding the output
+
+What the model receives is capped at **128 KB** (`OutputAccumulator`: the first 64 KB, the last
+64 KB, and the middle replaced by `... [N characters omitted] ...`). A command's output is
+unbounded in principle — `yes`, a build log, `base64` of a file — and it is handed to the model
+verbatim as a tool message, so without a cap a single `cat` of a large file would push the next
+request past the model's context window. Keeping the *tail* is deliberate: that is where a
+compiler, a package manager or a test runner puts the verdict.
+
+The `run_shell` reply says so explicitly when it happens (`note: output was too large …`),
+because a model that assumes it saw everything will wrongly conclude a search found nothing; the
+note points it at the workaround (redirect to a file, then `read_file` / `grep` / `tail`).
+
+The terminal *card* is bounded separately (128 KB, tail-only) in `ChatViewModel`: it is a view
+and it is persisted with the conversation, so it must not grow without bound either. The live
+stream is never trimmed — only what is kept is.
+
+### Long-running commands
+
+A turn can spend minutes inside one `run_shell` (`apt install`, a build, a test suite), so for
+the duration of a turn the app holds an `AgentForegroundService` — a foreground service plus a
+`PARTIAL_WAKE_LOCK`. Without it, switching away lets Android's cached-app freezer suspend the
+very timers command capture depends on (the command keeps running in the PTY, but nothing reads
+it), and the process can be killed outright; the `ShellManager` KDoc records exactly that
+failure appearing as a command that hangs for 55 minutes. The service is not a nuisance
+notification bolted on afterwards — it *is* the mechanism: it declares to the platform that
+user-visible work is in progress. It is `exported="false"`, `START_NOT_STICKY`, and stops in the
+turn's `finally`, so it cannot outlive the turn it belongs to.
+
+Pressing **Stop** cancels the turn *and* sends Ctrl-C to the PTY's foreground job. Cancelling the
+coroutine alone would leave the child process running — and the next command's snippet would then
+be typed straight into its `stdin` — so `ShellManager.exec` interrupts on cancellation and
+resynchronises the prompt before the next call. Stop deliberately does not surface an error: it
+is a user action, not a failure.
 
 ---
 

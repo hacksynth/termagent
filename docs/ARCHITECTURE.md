@@ -41,10 +41,13 @@ Because it can only target the device's own ABI, that mode produces a single-ABI
 | `ChatScreen.kt` | Top bar, message list, composer, onboarding, bootstrap panel, error bar. |
 | `SettingsScreen.kt` | Provider picker (178 presets), endpoint fields, `/models` discovery, safety switch, theme picker, destructive actions. |
 | `SessionDrawer.kt` | Conversation list (the ChatGPT sidebar). |
-| `MessageBubble.kt` | User bubble / assistant prose / tool card dispatch, plus a miniature Markdown renderer. |
+| `MessageBubble.kt` | User bubble / assistant prose / tool card dispatch. Message chrome only — the Markdown renderer lives in its own file. |
+| `Markdown.kt` | Markdown parser *and* renderer: headings, nested quotes/lists/task lists, tables, rules, fenced code (with copy), inline emphasis/strike/code/links. A flat `Block` model plus a hand-rolled recursive inline scanner; the parser half is JVM-tested (`MarkdownParserTest`). |
+| `ToolAction.kt` | Maps a tool name + arguments to the header label (`→ Run: ls -la ~`, `→ Read /path`), following `devx`'s verb table. Resolved in the UI from stored arguments, never persisted. |
 | `TerminalCard.kt` | Collapsible command+output card, ANSI-stripping, tail-follow auto-scroll. |
 | `Composer.kt` | Multi-line input + send/stop. |
 | `EmbeddedTerminal.kt` | `AndroidView` hosting the forked `TerminalView`. |
+| `AgentForegroundService.kt` | Not a UI file, but it is started for the duration of a turn: a foreground service + `PARTIAL_WAKE_LOCK` that stops the cached-app freezer from suspending command capture, and the process from being killed, while a long command runs. `exported="false"`, `START_NOT_STICKY`, stopped in the turn's `finally`. |
 | `Theme.kt` | `TermAgentPalette` (shell colours) + the Miuix `ThemeController` (controls, Monet). |
 
 Miuix supplies the *control* look (`Button`, `Switch`, `Card`, `IconButton`, `Icon`, `Text`,
@@ -216,6 +219,21 @@ append-only, so a marker is either present or not and nothing is ever emitted tw
 `Utf8StreamDecoder` is a second decode on top of the emulator's own, which is the deliberate
 cost of not depending on the emulator's view of the data; it is bounded by the read size
 (64 KiB) and dwarfed by the emulator's per-byte work.
+
+**Capture is bounded.** `OutputAccumulator` keeps the first 64 KB and the last 64 KB of what the
+scanner emits and drops the middle behind an explicit `... [N characters omitted] ...` marker;
+`ShellResult.truncated` carries the fact out of band, so a *command* that printed that sentence
+cannot be mistaken for a truncated capture. Output goes to the model verbatim as a tool message,
+so an uncapped buffer was both a memory limit and a context-window limit — one `cat` of a large
+file away from a 400. The streamed `onChunk` slices are **not** bounded: the terminal card is a
+live view. The card keeps its own separate 128 KB tail window in `ChatViewModel`, because it is
+persisted with the conversation.
+
+**Cancellation interrupts the job.** `exec` cancels on `CancellationException` by sending Ctrl-C
+and setting `needsRecovery`. The coroutine dying does not kill the child process, so without this
+the PTY keeps running the command and the *next* command's snippet is typed into its `stdin`;
+the shell would also keep emitting output that the next capture scans as its own (the marker scan
+is positional).
 
 `TermuxEnvironment.buildEnvironment()` reproduces the environment real Termux exports —
 `PREFIX`, `HOME`, `TMPDIR`, `PATH`, `LD_LIBRARY_PATH` (our own stand-in for the bootstrap's

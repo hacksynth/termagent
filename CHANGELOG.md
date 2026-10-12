@@ -15,6 +15,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* **A foreground service for the duration of a turn.** A turn can spend minutes
+  inside one `run_shell` (`apt install`, a build, a test suite), and once the app
+  was backgrounded Android's cached-app freezer could suspend the very timers the
+  command capture depends on — the command kept running in the pty while nothing
+  read it — or the process could be killed outright. `AgentForegroundService` is a
+  foreground service plus a `PARTIAL_WAKE_LOCK`, started for the turn and stopped
+  in its `finally`; it is `exported="false"` and `START_NOT_STICKY`, so it cannot
+  outlive the work it exists for. (The `WAKE_LOCK` and `FOREGROUND_SERVICE`
+  permissions were already declared but unused.)
+* `OutputAccumulator` (with `OutputAccumulatorTest`) bounding a command's captured
+  output, and `ToolResultTest` guarding the "carry metadata, never sniff it"
+  contract.
 * Repository open-sourced under **GPL-3.0-only**, with a [`NOTICE`](NOTICE)
   recording the Termux / jackpal / termux-dev (`devx`) attribution and their
   licenses.
@@ -23,6 +35,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   model.
 
 ### Fixed
+
+* **Command output was unbounded.** Everything a command printed was accumulated in
+  memory and handed to the model verbatim as a tool message, so a single `cat` of a
+  large file — or `yes`, or a build log — could exhaust memory *and* blow the
+  model's context window on the next request. Capture is now capped at 128 KB: the
+  first 64 KB and the last 64 KB, with the middle replaced by
+  `... [N characters omitted] ...`. Both ends are kept on purpose (the head has the
+  `exit_code:` line, the tail has a compiler's verdict). The reply also states the
+  truncation in prose and points at the workaround, because a model that assumes it
+  saw everything will wrongly conclude a search found nothing. `ShellResult.truncated`
+  carries the fact out of band, so a command that *printed* that sentence cannot be
+  mistaken for a truncated capture.
+* **Pressing Stop left the command running.** Cancelling the coroutine does not kill
+  the child process, so the pty kept executing; the next command's snippet would then
+  be typed straight into its `stdin`, and its output would be scanned as the next
+  command's (the marker scan is positional). `ShellManager.exec` now sends Ctrl-C on
+  cancellation and flags the shell for prompt recovery.
+* **Pressing Stop showed a red "Job was cancelled" error.** `CancellationException`
+  fell into the generic `Throwable` handler. Stopping a turn is a user action, not a
+  failure, and is now handled separately.
+* **A `read_file` of a file mentioning `exit_code: 124` showed an "exit 124" badge.**
+  The UI re-derived the exit status by regexing the tool reply text, but that text is
+  arbitrary content for every tool except `run_shell`. The exit status is now carried
+  on `ToolResult` / `AgentEvent.ToolFinished` (`ToolResult.exitCode`), and the
+  text-sniffing `EXIT_CODE_REGEX` is gone.
+* **`persist()` saved the wrong conversation.** It ignored its argument and always
+  wrote `_state.value.current`, so a save queued while switching, deleting or clearing
+  a conversation could silently write the wrong one — losing the edit that prompted it.
+* **A terminal card's output was unbounded** in memory and in the persisted
+  conversation JSON. The card (a live view, not the tool result) keeps a separate
+  128 KB tail window (`ChatViewModel.MAX_TERMINAL_OUTPUT_CHARS`).
 
 * **A finished command could hang until its timeout.** Command output was derived
   from the terminal emulator's rendered scrollback and diffed positionally. The
@@ -48,6 +91,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   once a second, written straight through at the end of the turn).
 * **A conversation reloaded after a killed turn could render a permanently blinking
   cursor**, because `ChatEntry.isStreaming` was persisted but never cleared on load.
+
+### Security
+
+* **`android:allowBackup` is now `false`,** with an empty
+  `res/xml/data_extraction_rules.xml` covering both `<cloud-backup>` and
+  `<device-transfer>`. Provider API keys live unencrypted in `SharedPreferences`, and
+  the app's private storage holds the unpacked `$PREFIX` (the user's shell history and
+  every file the agent wrote) — none of which should leave the sandbox in a backup.
+  Clearing the app's data or reinstalling is the supported way to reset; there is no
+  restore path, and nothing worth restoring that the APK does not already contain.
+  See [`SECURITY.md`](SECURITY.md).
 
 ### Changed
 

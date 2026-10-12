@@ -207,4 +207,10 @@
     <string name="time_hours_ago">%1$d 小时前</string>
     <string name="time_days_ago">%1$d 天前</string>
 
+    <!-- ============================================================ 前台服务 -->
+    <string name="foreground_channel_name">正在执行命令</string>
+    <string name="foreground_channel_description">当智能体在终端中执行命令时显示。</string>
+    <string name="foreground_title">TermAgent 正在工作</string>
+    <string name="foreground_text">终端中仍有命令正在运行。</string>
+
 </resources>

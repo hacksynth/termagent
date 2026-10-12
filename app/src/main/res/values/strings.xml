@@ -215,4 +215,10 @@
     <string name="time_hours_ago">%1$d h ago</string>
     <string name="time_days_ago">%1$d d ago</string>
 
+    <!-- ============================================================ foreground service -->
+    <string name="foreground_channel_name">Running a command</string>
+    <string name="foreground_channel_description">Shown while the agent is executing a command in the terminal.</string>
+    <string name="foreground_title">TermAgent is working</string>
+    <string name="foreground_text">A command is still running in the terminal.</string>
+
 </resources>

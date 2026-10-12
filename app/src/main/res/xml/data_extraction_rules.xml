@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Backup and device-transfer policy (API 31+; `dataExtractionRules` supersedes `fullBackupContent`).
+
+    Nothing is included. See the rationale on `android:allowBackup` in AndroidManifest.xml:
+    `SharedPreferences` carries provider API keys in the clear, and the app's private storage holds
+    the unpacked Termux `$PREFIX` — the user's shell history, every file the agent wrote, and a few
+    hundred megabytes of binaries. An extraction archive for this app would be a credential leak and
+    a multi-hundred-megabyte upload.
+
+    Both sections are present and empty rather than the attribute being omitted: an app that only
+    declares `<cloud-backup>` leaves the device-transfer path governed by the platform default, and
+    on some OEM builds that default is "include everything".
+-->
+<data-extraction-rules>
+    <!-- Google Drive / auto-backup. -->
+    <cloud-backup>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </cloud-backup>
+
+    <!-- Android 12+ device-to-device transfer. -->
+    <device-transfer>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </device-transfer>
+</data-extraction-rules>

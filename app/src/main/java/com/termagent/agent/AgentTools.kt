@@ -26,6 +26,16 @@ import java.io.File
 data class ToolResult(
     val text: String,
     val isError: Boolean,
+    /**
+     * The command's exit status, for tools that run one; `null` for every other tool.
+     *
+     * Carried explicitly for the same reason as [isError]: the UI needs it to render the exit badge,
+     * and re-deriving it from [text] is unsound. Only `run_shell` replies *have* an exit status, yet
+     * a `read_file` of any file that merely mentions the string `exit_code: 124` — the app's own
+     * source and docs do — produced a fabricated "exit 124" badge on a perfectly successful read.
+     * The reply text is a wire format the model reads; it is not a reliable place to encode metadata.
+     */
+    val exitCode: Int? = null,
 ) {
     companion object {
         /**
@@ -304,10 +314,25 @@ class AgentTools(
             if (result.timedOut) {
                 append("\nnote: command exceeded ${timeoutSeconds}s and was interrupted (Ctrl-C).")
             }
+            // Stated in the reply, not only as the inline marker inside the body: this is the one
+            // thing that stops the model from treating a partial capture as the whole output and
+            // concluding a search found nothing. It points at the workaround (redirect to a file,
+            // then read/tail it) rather than implying the data is gone.
+            if (result.truncated) {
+                append(
+                    "\nnote: output was too large and the middle was omitted; the first and last " +
+                        "lines are shown. Redirect to a file (and then read_file / grep / tail it) " +
+                        "if you need the whole thing.",
+                )
+            }
             append("\n--- output ---\n")
             append(result.output.trimEnd().ifBlank { "(no output)" })
         }
-        return ToolResult(text, isError = result.timedOut || result.exitCode != 0)
+        return ToolResult(
+            text = text,
+            isError = result.timedOut || result.exitCode != 0,
+            exitCode = result.exitCode,
+        )
     }
 
     private fun readFile(args: JsonObject): String {

@@ -39,6 +39,15 @@ sealed interface AgentEvent {
         val name: String,
         val result: String,
         val isError: Boolean,
+        /**
+         * The command's exit status, when the tool ran one; `null` otherwise.
+         *
+         * Passed through from [com.termagent.agent.ToolResult.exitCode] so the UI never has to
+         * re-derive it from [result] — which is arbitrary text for most tools and therefore not a
+         * place to encode metadata (a `read_file` of a file mentioning `exit_code: 124` would
+         * otherwise show a fabricated exit badge).
+         */
+        val exitCode: Int? = null,
     ) : AgentEvent
 
     /**
@@ -209,6 +218,7 @@ class AgentEngine(
                         name = name,
                         result = result.text,
                         isError = result.isError,
+                        exitCode = result.exitCode,
                     ),
                 )
 

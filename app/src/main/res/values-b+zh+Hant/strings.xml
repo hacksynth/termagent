@@ -207,4 +207,10 @@
     <string name="time_hours_ago">%1$d 小時前</string>
     <string name="time_days_ago">%1$d 天前</string>
 
+    <!-- ============================================================ 前景服務 -->
+    <string name="foreground_channel_name">正在執行命令</string>
+    <string name="foreground_channel_description">當智慧代理在終端機中執行命令時顯示。</string>
+    <string name="foreground_title">TermAgent 正在運作</string>
+    <string name="foreground_text">終端機中仍有命令正在執行。</string>
+
 </resources>
