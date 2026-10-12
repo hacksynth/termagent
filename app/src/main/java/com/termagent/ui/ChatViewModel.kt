@@ -100,6 +100,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     /** Entry id of the assistant message being streamed. */
     private var streamingEntryId: String? = null
 
+    /** When the conversation was last written to disk; gates [persistThrottled]. */
+    private var lastPersistAt = 0L
+
     init {
         loadFromDisk()
     }
@@ -128,7 +131,17 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun loadFromDisk() {
         viewModelScope.launch {
-            val loaded = container.repository.loadAll()
+            // Nothing can be streaming on a cold start: a turn is not resumed across process
+            // death. An entry that says otherwise was written mid-turn and never finished — the
+            // process was killed, or the final write did not land. Left as-is it would render a
+            // permanently blinking cursor, hide the usage footer and suppress "(no response)".
+            val loaded = container.repository.loadAll().map { conversation ->
+                conversation.copy(
+                    entries = conversation.entries.map { entry ->
+                        if (entry.isStreaming) entry.copy(isStreaming = false) else entry
+                    },
+                )
+            }
             val current = loaded.firstOrNull() ?: SessionRepository.newConversation()
             _state.update {
                 it.copy(
@@ -527,6 +540,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
             AgentEvent.Done -> finishAssistantEntry(assistantEntryId)
         }
+
+        // Everything the turn produced lives in memory until it ends; make it durable as we go so
+        // a slow (or stuck) tool does not leave the conversation looking empty.
+        //
+        // `Done` is written straight through rather than throttled. The turn job's own `finally`
+        // would also persist it, but only once the coroutine unwinds — and a `Done` landing inside
+        // the throttle window is the normal case (the last delta is milliseconds earlier), so
+        // without this the last state to become true (`isStreaming = false`, the token counts)
+        // would be the one left waiting on an unwinding job that a process kill can interrupt.
+        if (event is AgentEvent.Done) persist() else persistThrottled()
     }
 
     /**
@@ -753,10 +776,28 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private fun persist(conversation: Conversation? = _state.value.current) {
         val target = conversation ?: return
         if (target.entries.isEmpty() && target.title.isBlank()) return
+        lastPersistAt = System.currentTimeMillis()
         viewModelScope.launch {
             runCatching { container.repository.save(_state.value.current ?: target) }
                 .onFailure { Log.w(TAG, "Failed to persist conversation ${target.id}", it) }
         }
+    }
+
+    /**
+     * Write the open conversation out while a turn is still streaming, at most every
+     * [PERSIST_INTERVAL_MS].
+     *
+     * Without this the turn was only written when it *ended*, so anything a still-running turn had
+     * produced — the assistant's text, the terminal cards and their streamed output — existed only
+     * in memory. A turn stuck waiting on a slow tool (a long `pkg install`, say) therefore looked
+     * like it had produced nothing at all, and if the process died the whole turn was lost.
+     *
+     * Throttled rather than called on every event: `TextDelta` arrives many times a second, and
+     * [SessionRepository.save] rewrites the whole conversation file each time.
+     */
+    private fun persistThrottled() {
+        if (System.currentTimeMillis() - lastPersistAt < PERSIST_INTERVAL_MS) return
+        persist()
     }
 
     // ------------------------------------------------------------------ history reconstruction
@@ -862,6 +903,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private companion object {
         const val TAG = "ChatViewModel"
         const val MAX_HISTORY_MESSAGES = 40
+
+        /**
+         * Minimum spacing between mid-turn writes, in milliseconds.
+         *
+         * Small enough that a turn interrupted by the process being killed loses at most a second
+         * or two of output, large enough that a fast stream of `TextDelta`s does not rewrite the
+         * conversation file dozens of times a second.
+         */
+        const val PERSIST_INTERVAL_MS = 1_000L
+
         val EXIT_CODE_REGEX = Regex("exit_code:\\s*(-?\\d+)")
     }
 }

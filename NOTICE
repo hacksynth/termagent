@@ -27,12 +27,24 @@ Termux's work, not ours.
 
 | Taken from upstream | Notes |
 | --- | --- |
-| `terminal-emulator/` — `TerminalEmulator`, `TerminalBuffer`, `TerminalRow`, `TerminalSession`, `TerminalColors`, `TextStyle`, `WcWidth`, `ByteQueue`, `KeyHandler`, … (18 Java sources) | Verbatim |
+| `terminal-emulator/` — `TerminalEmulator`, `TerminalBuffer`, `TerminalRow`, `TerminalSession`, `TerminalColors`, `TextStyle`, `WcWidth`, `ByteQueue`, `KeyHandler`, … (18 Java sources) | Verbatim, except `TerminalSession.java` (see below) |
 | `terminal-emulator/src/main/cpp/termux.c` — the JNI PTY bridge (`forkpty(3)`, `SIGWINCH`, `waitpid`) | Verbatim |
-| `terminal-view/` — `TerminalView`, `TerminalRenderer`, `GestureAndScaleRecognizer`, text-selection cursors, handle drawables (8 Java sources) | Verbatim |
+| `terminal-view/` — `TerminalView`, `TerminalRenderer`, `GestureAndScaleRecognizer`, text-selection cursors, handle drawables (8 Java sources) | Verbatim, except `TerminalView.java` (see below) |
 
 **Changes made by TermAgent** (the only differences from upstream):
 
+* `terminal-emulator/.../TerminalSession.java` — added `RawOutputListener` and
+  `setRawOutputListener(...)`, invoked with the untouched pty bytes immediately
+  before `mEmulator.append(...)`. Command output is captured by scanning that byte
+  stream, which is append-only; deriving it from the emulator's screen instead is
+  unsound, because the screen reflows on resize, trims scrollback and interprets
+  control sequences (see the `ShellManager` KDoc and
+  [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)). Purely additive: with no listener
+  registered the code path is the upstream one.
+* `terminal-view/.../TerminalView.java` — `onCreateInputConnection` additionally ORs
+  in `TYPE_CLASS_TEXT`. Upstream sets only the variation/flag bits, leaving the input
+  *class* zero, which is invalid per AOSP; IMEs that validate the class then refuse to
+  open a keyboard for the terminal. The deviation is marked in the file.
 * the native bridge is compiled with **CMake** instead of `ndk-build`, and can
   optionally be replaced by a prebuilt `libtermux.so` (see
   [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md));

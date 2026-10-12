@@ -41,10 +41,15 @@ sealed interface AgentEvent {
         val isError: Boolean,
     ) : AgentEvent
 
-    /** A complete assistant message — the ViewModel persists it. */
+    /**
+     * A complete assistant message.
+     *
+     * Note: this does **not** persist anything by itself. The ViewModel mirrors it into the open
+     * conversation and the turn is written to disk when it ends — see `ChatViewModel.persist`.
+     */
     data class MessageCompleted(val message: ChatMessage) : AgentEvent
 
-    /** A tool result message — the ViewModel persists it (as a terminal card). */
+    /** A tool result message; the ViewModel turns it into (or updates) a terminal card. */
     data class ToolMessageCompleted(val message: ChatMessage) : AgentEvent
 
     /**
@@ -187,8 +192,10 @@ class AgentEngine(
 
                 val allowed = allowCommandExecution || name != AgentTools.RUN_SHELL
                 val result = if (!allowed) {
-                    "Error: command execution is disabled by the user. Ask them to enable the " +
-                        "'Allow command execution' switch and try again."
+                    ToolResult.of(
+                        "Error: command execution is disabled by the user. Ask them to enable the " +
+                            "'Allow command execution' switch and try again.",
+                    )
                 } else {
                     tools.execute(name, call.function.arguments) { chunk ->
                         // Invoked synchronously from the shell's main-thread callback.
@@ -200,12 +207,12 @@ class AgentEngine(
                     AgentEvent.ToolFinished(
                         toolCallId = call.id,
                         name = name,
-                        result = result,
-                        isError = result.startsWith("Error"),
+                        result = result.text,
+                        isError = result.isError,
                     ),
                 )
 
-                val toolMessage = ChatMessage.tool(call.id, name, result)
+                val toolMessage = ChatMessage.tool(call.id, name, result.text)
                 messages += toolMessage
                 send(AgentEvent.ToolMessageCompleted(toolMessage))
             }

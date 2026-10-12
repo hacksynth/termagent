@@ -16,6 +16,34 @@ import kotlinx.serialization.json.put
 import java.io.File
 
 /**
+ * The outcome of one tool call: the text handed back to the model, plus whether it failed.
+ *
+ * The flag is carried explicitly rather than being re-derived from the text. The previous
+ * `text.startsWith("Error")` heuristic silently marked a **timed-out or non-zero-exit**
+ * `run_shell` as successful, because those results are phrased as `exit_code: 124\nnote: …` —
+ * so the UI showed a green "Succeeded" badge on a command that had been killed.
+ */
+data class ToolResult(
+    val text: String,
+    val isError: Boolean,
+) {
+    companion object {
+        /**
+         * Classify a plain tool reply by its prefix.
+         *
+         * Only the non-shell tools use this: they *write* their replies, so "the text starts with
+         * `Error`" is a convention they control. `run_shell` deliberately does not — its reply is
+         * the wire format the model reads (`exit_code: …`), and it sets [isError] from the exit
+         * status instead.
+         */
+        fun of(text: String): ToolResult = ToolResult(text, text.startsWith(ERROR_PREFIX))
+    }
+}
+
+/** Prefix that marks a tool reply as a failure; see [ToolResult.of]. */
+private const val ERROR_PREFIX = "Error"
+
+/**
  * The tools the agent can call.
  *
  * Each tool is exposed to the model as an OpenAI "function" and implemented here against
@@ -41,6 +69,25 @@ class AgentTools(
         private const val ARG_CONTENT = "content"
         private const val ARG_MAX_BYTES = "max_bytes"
         private const val ARG_PROMPT = "prompt"
+
+        /**
+         * Default `run_shell` budget, in seconds, when the model does not ask for one.
+         *
+         * Derived from [ShellManager.DEFAULT_TIMEOUT_MS] for the same reason as
+         * [MAX_TIMEOUT_SECONDS]: the tool advertised "default 120" in its schema while the shell
+         * had its own copy of that number.
+         */
+        private val DEFAULT_TIMEOUT_SECONDS = (ShellManager.DEFAULT_TIMEOUT_MS / 1000L).toInt()
+
+        /**
+         * Ceiling for the model-supplied `run_shell` timeout, in seconds.
+         *
+         * **Derived** from [ShellManager.MAX_TIMEOUT_MS] rather than repeated: the two used to be
+         * independent numbers, so the schema could advertise one maximum while the shell enforced
+         * another. The schema value is what the model is told; the shell's clamp is what actually
+         * happens, and it also covers a request that does not come from the model at all.
+         */
+        private val MAX_TIMEOUT_SECONDS = (ShellManager.MAX_TIMEOUT_MS / 1000L).toInt()
 
         const val RUN_SHELL = "run_shell"
         const val READ_FILE = "read_file"
@@ -94,7 +141,7 @@ class AgentTools(
                     ARG_TIMEOUT,
                     buildJsonObject {
                         put("type", "integer")
-                        put("description", "Kill the command after this many seconds (default 120).")
+                        put("description", "Kill the command after this many seconds (default $DEFAULT_TIMEOUT_SECONDS, maximum $MAX_TIMEOUT_SECONDS).")
                     },
                 )
             },
@@ -215,35 +262,44 @@ class AgentTools(
         name: String,
         argumentsJson: String,
         onOutput: (String) -> Unit = {},
-    ): String {
+    ): ToolResult {
         val args = runCatching {
             ChatJson.parseToJsonElement(argumentsJson.ifBlank { "{}" }).jsonObject
-        }.getOrElse { return "Error: tool arguments were not valid JSON (${it.message})." }
+        }.getOrElse {
+            return ToolResult("Error: tool arguments were not valid JSON (${it.message}).", true)
+        }
 
         return try {
             when (name) {
                 RUN_SHELL -> runShell(args, onOutput)
-                READ_FILE -> readFile(args)
-                WRITE_FILE -> writeFile(args)
-                LIST_DIR -> listDir(args)
-                SYSTEM_INFO -> systemInfo()
-                LIST_ATTACHMENTS -> listAttachments()
-                VIEW_IMAGE -> viewImage(args)
-                else -> "Error: unknown tool '$name'."
+                // The remaining tools signal failure by the "Error" prefix on their reply, which
+                // is also exactly what the model reads — so classifying by prefix is correct here.
+                READ_FILE -> ToolResult.of(readFile(args))
+                WRITE_FILE -> ToolResult.of(writeFile(args))
+                LIST_DIR -> ToolResult.of(listDir(args))
+                SYSTEM_INFO -> ToolResult.of(systemInfo())
+                LIST_ATTACHMENTS -> ToolResult.of(listAttachments())
+                VIEW_IMAGE -> ToolResult.of(viewImage(args))
+                else -> ToolResult("Error: unknown tool '$name'.", true)
             }
         } catch (t: Throwable) {
-            "Error running $name: ${t.message ?: t.javaClass.simpleName}"
+            ToolResult("Error running $name: ${t.message ?: t.javaClass.simpleName}", true)
         }
     }
 
-    private suspend fun runShell(args: JsonObject, onOutput: (String) -> Unit): String {
+    private suspend fun runShell(args: JsonObject, onOutput: (String) -> Unit): ToolResult {
         val command = args.str(ARG_COMMAND)
-            ?: return "Error: '$ARG_COMMAND' is required."
-        val timeoutSeconds = args.int(ARG_TIMEOUT)?.coerceIn(1, 3600) ?: 120
+            ?: return ToolResult("Error: '$ARG_COMMAND' is required.", true)
+        val timeoutSeconds = args.int(ARG_TIMEOUT)?.coerceIn(1, MAX_TIMEOUT_SECONDS)
+            ?: DEFAULT_TIMEOUT_SECONDS
 
         val result = shell.exec(command, timeoutMillis = timeoutSeconds * 1000L, onChunk = onOutput)
 
-        return buildString {
+        // The reply text is the wire format the model reads, so it stays exactly as it was — but
+        // failure is now reported through [ToolResult.isError] instead of being guessed from the
+        // text. A command killed at its timeout, or one that simply exited non-zero, is a failure
+        // even though its reply does not start with "Error" (it starts with "exit_code:").
+        val text = buildString {
             append("exit_code: ").append(result.exitCode)
             if (result.timedOut) {
                 append("\nnote: command exceeded ${timeoutSeconds}s and was interrupted (Ctrl-C).")
@@ -251,6 +307,7 @@ class AgentTools(
             append("\n--- output ---\n")
             append(result.output.trimEnd().ifBlank { "(no output)" })
         }
+        return ToolResult(text, isError = result.timedOut || result.exitCode != 0)
     }
 
     private fun readFile(args: JsonObject): String {

@@ -28,9 +28,9 @@ data class ShellResult(
  * programs (`top`, `vim`, `apt`) behave correctly.
  *
  * ### How output is captured
- * The terminal emulator already renders everything into a scrollback buffer, so instead
- * of parsing raw bytes we bracket each command with *sentinel markers* printed by the
- * shell itself:
+ * Each command is bracketed by *sentinel markers* printed by the shell itself, and the
+ * **raw pty byte stream** — not the rendered screen — is scanned for them (see
+ * [TerminalSession.setRawOutputListener]):
  *
  * ```sh
  * __termagent_id=42
@@ -48,13 +48,40 @@ data class ShellResult(
  *
  * The command runs in the *current* shell (not a subshell), so `cd`, `export` and
  * `alias` persist across calls.
+ *
+ * ### Why the raw byte stream and not the emulator's screen
+ * An earlier version derived the output from `TerminalBuffer.getTranscriptTextWithFullLinesJoined()`
+ * — i.e. by re-rendering the emulator's scrollback and diffing it. That is unsound, because the
+ * screen is a *lossy projection* of the byte stream, not a buffer of it:
+ *
+ *  * **Resizing reflows text.** Attaching a `TerminalView` (opening the Terminal tab), rotating
+ *    the device or showing the IME all call `updateSize()`, which re-wraps every line. The same
+ *    logical output then yields a *different number of characters*, so a position-based diff
+ *    desynchronises: text gets re-emitted and, worse, an already-scanned end marker can fall
+ *    outside the new region and never be recognised.
+ *  * **Scrollback is trimmed and lines are right-trimmed**, so the text can legitimately shrink.
+ *  * Escape sequences are interpreted rather than preserved.
+ *
+ * The failure mode was severe: a command that had *already finished* (its end marker printed and
+ * visible in the scrollback) went unrecognised, so `exec` blocked until its timeout — which the
+ * model itself chooses (`timeout_seconds`). Combined with the cached-app freezer suspending
+ * timers, a completed `pkg install` appeared to hang for 55 minutes.
+ *
+ * Reading the bytes before emulation makes the capture an **append-only** stream, which is what
+ * the marker scan actually needs: positions never shift, so a marker is either present or not,
+ * and output is never re-emitted.
  */
 class ShellManager(
     @Suppress("UNUSED_PARAMETER") context: Context,
     val env: TermuxEnvironment,
 ) {
 
-    /** Incremental raw output of the shell (used by the interactive terminal view). */
+    /**
+     * Incremental raw output of the shell (used by the interactive terminal view).
+     *
+     * Driven by [onRawOutput] — i.e. by the pty byte stream, not by the rendered screen — so the
+     * slices are exactly what the child process wrote and are never re-delivered after a reflow.
+     */
     private val rawListeners = CopyOnWriteArrayList<(String) -> Unit>()
 
     /** Repaint hooks for attached terminal views — see [addScreenUpdateObserver]. */
@@ -62,6 +89,12 @@ class ShellManager(
 
     private val execMutex = Mutex()
     private val idGenerator = AtomicLong(0)
+
+    /**
+     * Decodes the pty's byte stream into text across reads. Owned by the session's main-thread
+     * output handler, so it needs no lock — see [onRawOutput].
+     */
+    private val rawDecoder = Utf8StreamDecoder()
 
     private val sessionLock = Any()
 
@@ -104,6 +137,10 @@ class ShellManager(
             // agent works even when no terminal UI is on screen.
             created.initializeEmulator(DEFAULT_COLUMNS, DEFAULT_ROWS, CELL_WIDTH_PX, CELL_HEIGHT_PX)
 
+            // Capture happens on the raw byte stream, before emulation — see the class KDoc for
+            // why the rendered screen cannot be used for it.
+            created.setRawOutputListener { data, length -> onRawOutput(data, length) }
+
             terminalSession = created
             Log.i(TAG, "Started shell pid=${created.pid} (${env.loginShellPath})")
             return created
@@ -122,6 +159,21 @@ class ShellManager(
      */
     val isInstalled: Boolean get() = env.isBootstrapInstalled
 
+    /**
+     * Observe every slice the child process writes, decoded from the pty's byte stream.
+     *
+     * The text is *exactly* what was written — no emulation, so no reflow, no trimmed scrollback
+     * and no escape-sequence interpretation (see [onRawOutput]). It is the same stream command
+     * capture scans, which makes this the right hook for logging or for mirroring output
+     * somewhere other than a terminal view.
+     *
+     * Currently nothing in the app registers one: the interactive `TerminalView` renders the
+     * emulator's screen itself and only needs to be *told* when to repaint, which is
+     * [addScreenUpdateObserver]. Kept as a documented seam rather than deleted, because it is the
+     * only way to see the stream as written.
+     *
+     * Called on the main thread, while a command's output is being captured.
+     */
     fun addRawOutputListener(listener: (String) -> Unit) {
         rawListeners += listener
     }
@@ -134,10 +186,10 @@ class ShellManager(
      * Registers a callback invoked whenever the emulator's screen changes, so a `TerminalView`
      * can repaint.
      *
-     * This is deliberately **separate** from [addRawOutputListener]: a repaint needs no text at
-     * all, whereas the raw-output path has to materialise the whole transcript. Keeping them
-     * apart is what allows [onSessionTextChanged] to skip that cost entirely while the user is
-     * typing interactively.
+     * Deliberately **separate** from [addRawOutputListener], because the two have opposite cost
+     * profiles: a repaint needs no text at all, whereas the raw-output path decodes bytes and runs
+     * the marker scan. This fires on every read from the pty, including ones that carry no output
+     * (`reset()`, a reflow), so it is kept free of work and can never be skipped.
      *
      * The callback fires on the main thread (see [onSessionTextChanged]).
      */
@@ -190,14 +242,19 @@ class ShellManager(
         )
         pending = execution
 
+        // Clamp whatever the caller (ultimately the model) passed: an unbounded budget turns any
+        // capture problem into an apparently hung app.
+        val budget = timeoutMillis.coerceIn(1L, MAX_TIMEOUT_MS)
+
         try {
             val snippet = buildSnippet(id, command)
             val bytes = snippet.toByteArray(Charsets.UTF_8)
             session.write(bytes, 0, bytes.size)
 
-            val completed = withTimeoutOrNull(timeoutMillis) { execution.completion.await() }
+            val completed = withTimeoutOrNull(budget) { execution.completion.await() }
             if (completed == null) {
                 // Interrupt the foreground job and remember to clean up next time.
+                Log.w(TAG, "Command exceeded ${budget}ms; interrupting")
                 sendInterrupt()
                 needsRecovery = true
                 ShellResult(TIMEOUT_EXIT_CODE, execution.buffer.toString(), timedOut = true)
@@ -218,14 +275,15 @@ class ShellManager(
     // ---------------------------------------------------------------- internals
 
     private class PendingExecution(
-        val beginMarker: String,
-        val endMarker: String,
         val onChunk: (String) -> Unit,
+        beginMarker: String,
+        endMarker: String,
     ) {
-        val buffer = StringBuilder()
+        /** Scanner over the raw byte stream — see [CommandCapture]. */
+        val capture = CommandCapture(beginMarker, endMarker)
 
-        /** How much of the region *after* the begin marker has already been streamed. */
-        var streamedChars = 0
+        /** Everything captured so far; what the model ultimately receives. */
+        val buffer = StringBuilder()
 
         val completion = CompletableDeferred<ShellResult>()
     }
@@ -255,94 +313,60 @@ class ShellManager(
      * (`TerminalSession.MainThreadHandler` posts `MSG_NEW_INPUT` per read, then calls
      * `notifyScreenUpdate()`).
      *
-     * That makes the ordering here a latency concern, not a style choice:
-     *
-     *  1. Repaint first, and unconditionally. The attached `TerminalView` only redraws when it is
-     *     told the screen changed, so the echo of a keystroke is invisible until this runs. It
-     *     needs no text, so it must not sit behind anything that can be expensive or bail out.
-     *  2. Only then — and only if something actually consumes the text — materialise the
-     *     transcript. [transcriptOf] walks every active transcript row (up to [TRANSCRIPT_ROWS],
-     *     i.e. 2000) and builds a large string; doing that on each echoed character was pure
-     *     main-thread jank during typing, so it is skipped whenever no agent command is pending
-     *     and nothing is listening for raw output.
+     * This exists purely so an attached `TerminalView` can repaint: it is the only thing that
+     * tells the view the screen changed, so it must run unconditionally and must never be put
+     * behind anything expensive. Command capture deliberately does **not** happen here — it runs
+     * off the raw byte stream in [onRawOutput], precisely because this callback also fires for
+     * events that carry no output at all (`reset()`, scrollback trimming, a reflow).
      */
-    private fun onSessionTextChanged(session: TerminalSession) {
+    private fun onSessionTextChanged(@Suppress("UNUSED_PARAMETER") session: TerminalSession) {
         for (observer in screenObservers) {
             runCatching { observer() }
                 .onFailure { Log.w(TAG, "Screen update observer failed", it) }
         }
+    }
 
-        // Fast path while the user is typing: repaint only, no transcript.
-        val execution = pending
-        if (execution == null && rawListeners.isEmpty()) return
-
-        val text = transcriptOf(session) ?: return
+    /**
+     * Every byte the child process wrote, straight from the pty and *before* terminal emulation.
+     *
+     * Runs on the main thread (the session's output handler), so the decoder and the pending
+     * execution need no synchronisation. [data] is the reader's reused buffer, so it is never
+     * retained — it is decoded immediately.
+     */
+    private fun onRawOutput(data: ByteArray, length: Int) {
+        val text = rawDecoder.decode(data, length)
+        if (text.isEmpty()) return
 
         for (listener in rawListeners) {
             runCatching { listener(text) }
                 .onFailure { Log.w(TAG, "Raw output listener failed", it) }
         }
 
-        if (execution != null) consume(execution, text)
-    }
-
-    private fun consume(execution: PendingExecution, text: String) {
-        val beginIndex = text.lastIndexOf(execution.beginMarker)
-        if (beginIndex < 0) return
-
-        val bodyStart = beginIndex + execution.beginMarker.length
-        val endIndex = findEndMarker(text, execution.endMarker, bodyStart)
-        val bodyEnd = if (endIndex >= 0) endIndex else text.length
-
-        if (bodyEnd > bodyStart) {
-            // The senders print the marker followed by its own newline; drop it so the
-            // captured output starts exactly at the command's first character.
-            val region = text.substring(bodyStart, bodyEnd).removePrefix("\r\n").removePrefix("\n")
-
-            if (region.length > execution.streamedChars) {
-                val chunk = region.substring(execution.streamedChars)
-                execution.streamedChars = region.length
-                execution.buffer.append(chunk)
-                execution.onChunk(chunk)
-            } else if (region.length < execution.streamedChars) {
-                // Scrollback was trimmed out from under us — resync rather than lose data.
-                Log.w(TAG, "Transcript shrank (${execution.streamedChars} -> ${region.length}); resyncing")
-                execution.streamedChars = 0
-            }
-        }
-
-        if (endIndex >= 0 && !execution.completion.isCompleted) {
-            val exitCode = parseExitCode(text, endIndex + execution.endMarker.length)
-            execution.completion.complete(ShellResult(exitCode, execution.buffer.toString()))
-        }
+        // Only accumulate while a command is actually running; an idle shell must not be buffered.
+        val execution = pending ?: return
+        consume(execution, text)
     }
 
     /**
-     * Last occurrence of [marker] at/after [fromIndex] that is followed by a bare integer —
-     * this is what distinguishes the real sentinel from the shell's echo of the snippet.
+     * Hand [text] to the scanner and forward whatever it now considers final.
+     *
+     * All the marker-scanning rules live in [CommandCapture] (which is pure and unit-tested); this
+     * only decides what to do with the pieces.
      */
-    private fun findEndMarker(text: String, marker: String, fromIndex: Int): Int {
-        var index = text.lastIndexOf(marker)
-        while (index >= fromIndex) {
-            if (trailingWord(text, index + marker.length).toIntOrNull() != null) return index
-            index = text.lastIndexOf(marker, index - 1)
+    private fun consume(execution: PendingExecution, text: String) {
+        val chunk = execution.capture.accept(text)
+        if (chunk.isNotEmpty()) {
+            execution.buffer.append(chunk)
+            execution.onChunk(chunk)
         }
-        return -1
+
+        // Non-null exit status means the end marker was found: the command is finished.
+        val exitCode = execution.capture.exitCode
+        if (exitCode != null && !execution.completion.isCompleted) {
+            execution.completion.complete(ShellResult(exitCode, execution.buffer.toString()))
+        }
+
     }
-
-    private fun parseExitCode(text: String, fromIndex: Int): Int =
-        trailingWord(text, fromIndex).toIntOrNull() ?: -1
-
-    private fun trailingWord(text: String, fromIndex: Int): String {
-        if (fromIndex >= text.length) return ""
-        val tail = text.substring(fromIndex)
-        val lineEnd = tail.indexOf('\n').let { if (it == -1) tail.length else it }
-        return tail.substring(0, lineEnd).trim()
-    }
-
-    private fun transcriptOf(session: TerminalSession): String? =
-        session.emulator?.screen?.transcriptTextWithFullLinesJoined
-
     private fun String.toLogPriority(): Int = when (this) {
         "V" -> Log.VERBOSE
         "D" -> Log.DEBUG
@@ -361,7 +385,19 @@ class ShellManager(
         /** Exit status used when we had to kill a command because it exceeded its budget. */
         const val TIMEOUT_EXIT_CODE = 124
 
+        /** How long a command may run before it is interrupted. */
         const val DEFAULT_TIMEOUT_MS = 120_000L
+
+        /**
+         * Hard ceiling for a command's budget, whatever the model asks for.
+         *
+         * The tool lets the model pick a timeout (`timeout_seconds`), but it used to allow an
+         * hour. That is a poor trade: while a timeout is pending, a detection bug looks exactly
+         * like a hung app, and Android's cached-app freezer suspends the timer anyway, so the
+         * failure lasts far longer than the budget suggests. A command that legitimately needs
+         * more than this should be run as a background job (`nohup … &`) instead.
+         */
+        const val MAX_TIMEOUT_MS = 600_000L
 
         /** Scrollback depth; Termux's own default is 2000. */
         private const val TRANSCRIPT_ROWS = 2000

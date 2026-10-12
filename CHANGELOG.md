@@ -22,6 +22,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (Contributor Covenant 2.1) and [`SECURITY.md`](SECURITY.md) describing the threat
   model.
 
+### Fixed
+
+* **A finished command could hang until its timeout.** Command output was derived
+  from the terminal emulator's rendered scrollback and diffed positionally. The
+  screen is a *lossy projection* of the pty byte stream: attaching the terminal
+  tab, rotating the device or showing the IME calls `updateSize()`, which reflows
+  every line and changes the character count, so the diff desynchronised and an
+  end marker that had already been printed could go unrecognised. Output is now
+  captured from the **raw byte stream** (`CommandCapture`), scanned before the
+  bytes reach the emulator, which is append-only and therefore cannot mis-detect a
+  marker. Reported symptom: a completed `pkg install` blocking for its whole budget.
+* **A non-zero exit — or a timeout — showed as "Succeeded".** The tool result was
+  classified by `text.startsWith("Error")`, but `run_shell` replies with
+  `exit_code: 124, …`, so a killed command rendered a green badge. Failure is now
+  carried explicitly on the result (`ToolResult.isError`).
+* **The `run_shell` timeout ceiling was not what the schema advertised.** The tool
+  clamped to 3600 s while the shell enforced 600 s; both values are now derived from
+  one constant, and a caller-supplied timeout is clamped in the shell as well.
+* **Multi-byte output split across a `read(2)` was mangled** into replacement
+  characters (`Utf8StreamDecoder` carries the partial sequence over).
+* **A turn's progress was only written to disk when it ended**, so a conversation
+  in the middle of a slow tool looked empty and a turn interrupted by the process
+  being killed was lost entirely. It is now persisted as it streams (throttled to
+  once a second, written straight through at the end of the turn).
+* **A conversation reloaded after a killed turn could render a permanently blinking
+  cursor**, because `ChatEntry.isStreaming` was persisted but never cleared on load.
+
 ### Changed
 
 * **Terminal cards now name the action instead of dumping arguments.** The header

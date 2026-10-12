@@ -50,6 +50,33 @@ public final class TerminalSession extends TerminalOutput {
     /** Buffer to write translate code points into utf8 before writing to mTerminalToProcessIOQueue */
     private final byte[] mUtf8InputBuffer = new byte[5];
 
+    /**
+     * Optional observer of the <em>raw</em> child-process output, called before the bytes reach
+     * {@link #mEmulator}.
+     * <p>
+     * This exists because the terminal emulator's screen is a lossy view of the byte stream: the
+     * emulator reflows text on resize, trims scrollback, interprets control sequences and drops
+     * trailing whitespace. Anything that needs the exact bytes a program wrote — for example
+     * matching sentinel markers to delimit a command's output — must read them here instead of
+     * re-parsing the rendered screen.
+     */
+    public interface RawOutputListener {
+        /**
+         * @param data   the bytes just read from the pty. <b>The array is reused</b> by the reader
+         *               for the next read, so a listener that needs to retain them must copy.
+         * @param length number of valid bytes in {@code data}.
+         */
+        void onRawOutput(byte[] data, int length);
+    }
+
+    /** See {@link RawOutputListener}. Volatile: written from the main thread, read from it too. */
+    private volatile RawOutputListener mRawOutputListener;
+
+    /** Register (or, with {@code null}, clear) the {@link RawOutputListener}. */
+    public void setRawOutputListener(RawOutputListener listener) {
+        mRawOutputListener = listener;
+    }
+
     /** Callback which gets notified when a session finishes or changes title. */
     TerminalSessionClient mClient;
 
@@ -342,6 +369,18 @@ public final class TerminalSession extends TerminalOutput {
         public void handleMessage(Message msg) {
             int bytesRead = mProcessToTerminalIOQueue.read(mReceiveBuffer, false);
             if (bytesRead > 0) {
+                // Hand the untouched bytes to any observer *before* emulation. Emulation is
+                // lossy (reflow, scrollback trimming, control-sequence interpretation), so a
+                // consumer that needs the exact stream cannot reconstruct it from the screen.
+                RawOutputListener rawListener = mRawOutputListener;
+                if (rawListener != null) {
+                    try {
+                        rawListener.onRawOutput(mReceiveBuffer, bytesRead);
+                    } catch (Throwable t) {
+                        // A listener bug must never stop the terminal from rendering.
+                        Logger.logStackTraceWithMessage(mClient, LOG_TAG, "Raw output listener failed", t);
+                    }
+                }
                 mEmulator.append(mReceiveBuffer, bytesRead);
                 notifyScreenUpdate();
             }

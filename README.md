@@ -134,9 +134,38 @@ CHANGELOG.md                 # Keep a Changelog
 7. The exit status is captured, the result is fed back to the model as a `tool` message, and
    the loop repeats until the model answers with no tool calls.
 
-### How output is captured without parsing raw bytes
+### How output is captured
 
-Commands are bracketed by **sentinel markers with a nonce**, printed by the shell itself:
+Commands are bracketed by **sentinel markers with a nonce**, printed by the shell itself, and the
+**raw pty byte stream** is scanned for them — *before* those bytes reach the terminal emulator:
+
+```text
+pty ──► TerminalSession.MainThreadHandler ──┬──► RawOutputListener ──► CommandCapture ──► tool result
+                                            │
+                                            └──► TerminalEmulator ──► scrollback ──► TerminalView
+```
+
+Everything is driven by the byte read, so it is **not** a second path for the screen to travel:
+`CommandCapture` is a plain scanner with no access to the emulator, and the emulator's
+`terminal`/`scrollback` is never consulted for output.
+
+That distinction is the whole point. An earlier version derived the output from the emulator's
+scrollback (`getTranscriptTextWithFullLinesJoined()`) and diffed it positionally, which is
+unsound: the screen is a **lossy projection** of the byte stream, not a buffer of it. Attaching a
+terminal view, rotating the device or showing the IME all call `updateSize()`, reflowing every
+line — so the same logical output yields a different number of characters, the diff desynchronises,
+and an already-printed end marker can fall outside the recomputed region. The visible symptom was
+a command that had *finished* (marker printed, sitting in the scrollback) blocking until its
+timeout. The byte stream is append-only, so a marker is either present or not, and no output is
+ever delivered twice.
+
+The scanner itself ([`CommandCapture`](app/src/main/java/com/termagent/shell/CommandCapture.kt))
+is deliberately free of Android types, so its rules — a marker split across two reads, a command
+that prints marker-like text, output arriving one byte at a time, the shell's own echo of the
+snippet, CRLF from the pty — are covered by plain JVM unit tests
+(`app/src/test/java/com/termagent/shell/CommandCaptureTest.kt`).
+
+The markers the shell prints around each command look like this:
 
 ```sh
 __termagent_id=42

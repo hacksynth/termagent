@@ -199,6 +199,24 @@ It exposes two modes:
 Ctrl-C and sets `needsRecovery`, which resynchronises the prompt before the next command so a
 half-typed continuation cannot swallow the sentinels.
 
+**Capture reads the byte stream, not the screen.** `TerminalSession` gained a
+`RawOutputListener` (`setRawOutputListener`) that is handed the untouched pty bytes on the main
+thread, immediately before `mEmulator.append(...)`; `ShellManager.onRawOutput` decodes them with
+`Utf8StreamDecoder` (a UTF-8 character can straddle two reads) and feeds the text to
+`CommandCapture`, which owns every marker rule. The emulator's scrollback is never consulted.
+
+The earlier implementation did the opposite — it re-rendered `getTranscriptTextWithFullLinesJoined()`
+and diffed the result positionally — which cannot work, because the screen is a *lossy*
+projection of the stream: `updateSize()` (terminal tab attached, rotation, IME) reflows every
+line, scrollback is trimmed, and control sequences are interpreted. Text then changes length,
+the diff desynchronises, and an end marker that has already been printed can fall outside the
+recomputed region — so a *finished* command blocked until its timeout. The byte stream is
+append-only, so a marker is either present or not and nothing is ever emitted twice.
+
+`Utf8StreamDecoder` is a second decode on top of the emulator's own, which is the deliberate
+cost of not depending on the emulator's view of the data; it is bounded by the read size
+(64 KiB) and dwarfed by the emulator's per-byte work.
+
 `TermuxEnvironment.buildEnvironment()` reproduces the environment real Termux exports —
 `PREFIX`, `HOME`, `TMPDIR`, `PATH`, `LD_LIBRARY_PATH` (our own stand-in for the bootstrap's
 baked-in `DT_RUNPATH`), `LD_PRELOAD` (`libtermux-exec-ld-preload.so`, Termux's `exec` shim),
