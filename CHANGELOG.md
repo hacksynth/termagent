@@ -15,6 +15,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* **Test coverage for the agent loop and the wire-history rules** — the two places
+  where a mistake is invisible until a *later* turn fails. `AgentEngine` now depends
+  on two interfaces (`LlmStreamer`, `AgentToolRunner`) instead of the concrete
+  `LlmClient` / `AgentTools`, so the loop is driven by scripted event streams and
+  canned tool results, with no network, pty or `Context`. The entry-log →
+  wire-conversation translation moved out of `ChatViewModel` into `ApiHistory`, a
+  pure function. `AgentEngineTest` (19) and `ApiHistoryTest` (16) bring the suite to
+  **126** tests. The suite was validated by mutation, not just by passing: each rule
+  was disabled in turn and exactly the matching test failed.
+  `AgentEngine` also takes a `tooManyToolCalls: (Int) -> String` rather than an
+  Android `Context` — it needs one translated string, and the `Context` was what made
+  the loop uninstantiable off-device.
+
 * **A foreground service for the duration of a turn.** A turn can spend minutes
   inside one `run_shell` (`apt install`, a build, a test suite), and once the app
   was backgrounded Android's cached-app freezer could suspend the very timers the

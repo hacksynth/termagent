@@ -1,8 +1,6 @@
 package com.termagent.agent
 
-import android.content.Context
 import android.util.Log
-import com.termagent.R
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
@@ -80,19 +78,30 @@ sealed interface AgentEvent {
  * non-suspending callback (the terminal's main-thread handler), which needs [trySend].
  */
 class AgentEngine(
-    private val llm: LlmClient,
-    private val tools: AgentTools,
-    /** Application context, used only to resolve the one user-facing failure string below. */
-    private val context: Context,
+    private val llm: LlmStreamer,
+    private val tools: AgentToolRunner,
+    /**
+     * Resolves the one user-facing failure message (see [MAX_ITERATIONS]).
+     *
+     * A `(Int) -> String` rather than a `Context` on purpose: the engine needs exactly one
+     * translated string, and taking a `Context` made the whole loop untestable off-device — a JVM
+     * test cannot instantiate one. `AppContainer` supplies
+     * `{ context.getString(R.string.error_too_many_tool_calls, it) }`.
+     */
+    private val tooManyToolCalls: (Int) -> String,
 ) {
 
-    private companion object {
-        const val TAG = "AgentEngine"
+    internal companion object {
+        private const val TAG = "AgentEngine"
 
-        /** Safety net against a model that never stops calling tools. */
+        /**
+         * Safety net against a model that never stops calling tools.
+         *
+         * Internal so the test can assert the bound rather than hard-coding "12" a second time.
+         */
         const val MAX_ITERATIONS = 12
 
-        const val ARG_COMMAND = "command"
+        private const val ARG_COMMAND = "command"
     }
 
     /**
@@ -108,9 +117,9 @@ class AgentEngine(
     ): Flow<AgentEvent> = channelFlow {
         val availableTools = buildList {
             if (allowCommandExecution) {
-                addAll(tools.definitions.filter { it.function.name == AgentTools.RUN_SHELL })
+                addAll(tools.definitions.filter { it.function.name == AgentToolRunner.RUN_SHELL })
             }
-            addAll(tools.definitions.filter { it.function.name != AgentTools.RUN_SHELL })
+            addAll(tools.definitions.filter { it.function.name != AgentToolRunner.RUN_SHELL })
         }
 
         val messages = ArrayList<ChatMessage>(history.size + 2)
@@ -199,7 +208,7 @@ class AgentEngine(
                     ),
                 )
 
-                val allowed = allowCommandExecution || name != AgentTools.RUN_SHELL
+                val allowed = allowCommandExecution || name != AgentToolRunner.RUN_SHELL
                 val result = if (!allowed) {
                     ToolResult.of(
                         "Error: command execution is disabled by the user. Ask them to enable the " +
@@ -230,11 +239,7 @@ class AgentEngine(
 
         Log.w(TAG, "Hit MAX_ITERATIONS ($MAX_ITERATIONS) without a final answer")
         emitUsage()
-        send(
-            AgentEvent.Failure(
-                context.getString(R.string.error_too_many_tool_calls, MAX_ITERATIONS),
-            ),
-        )
+        send(AgentEvent.Failure(tooManyToolCalls(MAX_ITERATIONS)))
         send(AgentEvent.Done)
     }
 

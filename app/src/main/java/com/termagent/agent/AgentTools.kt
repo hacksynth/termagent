@@ -60,6 +60,37 @@ private const val ERROR_PREFIX = "Error"
  * the forked Termux backend. `run_shell` streams its output through [onOutput] so the UI
  * can render a live terminal card.
  */
+/**
+ * The tool-execution seam between [AgentEngine] and the real tools.
+ *
+ * Lets the loop be tested against a fake that returns canned results — including the streamed
+ * `onOutput` slices — without a pty, a filesystem or an Android runtime. The production
+ * implementation is [AgentTools]; see `AgentEngineTest`. Public (rather than internal) only so
+ * the public [AgentEngine] constructor can name it without tripping Kotlin's
+ * "public function exposes its internal parameter type" rule.
+ */
+interface AgentToolRunner {
+    /** Tool schemas advertised to the model. */
+    val definitions: List<ToolDefinition>
+
+    /** Run one tool call; see [AgentTools.execute] for the contract. */
+    suspend fun execute(
+        name: String,
+        argumentsJson: String,
+        onOutput: (String) -> Unit,
+    ): ToolResult
+
+    companion object {
+        /**
+         * The one tool the safety switch can withhold.
+         *
+         * Declared here, not on [AgentTools], so the loop's special-casing of it does not have to
+         * reach into the concrete tool class — [AgentTools] re-exports it under the same name.
+         */
+        const val RUN_SHELL = "run_shell"
+    }
+}
+
 class AgentTools(
     private val shell: ShellManager,
     private val env: TermuxEnvironment,
@@ -67,7 +98,7 @@ class AgentTools(
     private val vision: VisionClient,
     /** Files the user attached to the conversation currently open; see [AttachmentRegistry]. */
     private val attachments: () -> List<Attachment> = { emptyList() },
-) {
+) : AgentToolRunner {
 
     companion object {
         private const val MAX_READ_BYTES = 200_000
@@ -99,7 +130,8 @@ class AgentTools(
          */
         private val MAX_TIMEOUT_SECONDS = (ShellManager.MAX_TIMEOUT_MS / 1000L).toInt()
 
-        const val RUN_SHELL = "run_shell"
+        /** Re-exported from [AgentToolRunner] so there is a single source of truth. */
+        const val RUN_SHELL = AgentToolRunner.RUN_SHELL
         const val READ_FILE = "read_file"
         const val WRITE_FILE = "write_file"
         const val LIST_DIR = "list_dir"
@@ -132,7 +164,7 @@ class AgentTools(
     }
 
     /** Schemas handed to the model in every request. */
-    val definitions: List<ToolDefinition> = listOf(
+    override val definitions: List<ToolDefinition> = listOf(
         tool(
             name = RUN_SHELL,
             description = "Run a shell command in the persistent Termux (bash) PTY. " +
@@ -268,10 +300,10 @@ class AgentTools(
      * @param onOutput called with each new slice of streamed output (shell only).
      * @return the tool result text fed back to the model — never throws.
      */
-    suspend fun execute(
+    override suspend fun execute(
         name: String,
         argumentsJson: String,
-        onOutput: (String) -> Unit = {},
+        onOutput: (String) -> Unit,
     ): ToolResult {
         val args = runCatching {
             ChatJson.parseToJsonElement(argumentsJson.ifBlank { "{}" }).jsonObject

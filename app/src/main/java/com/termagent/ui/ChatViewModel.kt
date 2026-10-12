@@ -12,11 +12,8 @@ import com.termagent.TermAgentApp
 import com.termagent.agent.AgentEvent
 import com.termagent.agent.AgentForegroundService
 import com.termagent.agent.ApiConfig
+import com.termagent.agent.ApiHistory
 import com.termagent.agent.ChatMessage
-import com.termagent.agent.FunctionCall
-import com.termagent.agent.MessageContent
-import com.termagent.agent.ToolCall
-import com.termagent.agent.UserContent
 import com.termagent.data.Attachment
 import com.termagent.data.BootstrapState
 import com.termagent.data.ChatEntry
@@ -848,86 +845,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     /**
      * Rebuild the wire history from stored entries.
      *
-     * An assistant turn that requested tools must be replayed as
-     * `assistant(tool_calls=[…])` followed by one `tool` message per call, or the server
-     * rejects the request. The tool cards stored directly after an assistant entry give us
-     * exactly the ids/names/arguments needed.
-     *
-     * Only the most recent [MAX_HISTORY_MESSAGES] messages are sent, to bound the prompt.
+     * Delegates to [ApiHistory], which owns the entry-to-message rules (tool-call pairing,
+     * dropping the still-running and orphaned cards, the trailing-window trim) and is unit-tested
+     * there. This stays a thin adapter so the view model keeps the single dependency it actually
+     * has — the attachment store — and nothing else.
      */
-    private fun buildApiHistory(entries: List<ChatEntry>): List<ChatMessage> {
-        val messages = ArrayList<ChatMessage>(entries.size)
-
-        var index = 0
-        while (index < entries.size) {
-            val entry = entries[index]
-
-            when (entry.role) {
-                Role.User -> {
-                    // Attachments are re-expanded here, not just the first time: the same entry is
-                    // replayed on every turn of the conversation, and a historical image has to be
-                    // re-encoded as a content part each time (UserContent caches the base64).
-                    val content = UserContent.build(
-                        text = entry.text,
-                        attachments = entry.attachments,
-                        fileOf = container.attachmentStore::fileOf,
-                    )
-                    if (content != null) messages += ChatMessage.user(content)
-                    index++
-                }
-
-                Role.Assistant -> {
-                    val toolEntries = ArrayList<ChatEntry>()
-                    var cursor = index + 1
-                    while (cursor < entries.size && entries[cursor].role == Role.Tool) {
-                        toolEntries += entries[cursor]
-                        cursor++
-                    }
-
-                    val toolCalls = toolEntries.mapNotNull { toolEntry ->
-                        val block = toolEntry.terminal ?: return@mapNotNull null
-                        ToolCall(
-                            id = block.toolCallId,
-                            function = FunctionCall(name = block.toolName, arguments = block.arguments),
-                        )
-                    }
-
-                    if (entry.text.isNotBlank() || toolCalls.isNotEmpty()) {
-                        messages += ChatMessage(
-                            role = ChatMessage.ROLE_ASSISTANT,
-                            content = MessageContent.of(entry.text),
-                            toolCalls = toolCalls.takeIf { it.isNotEmpty() },
-                        )
-
-                        // A `tool` message must directly follow the assistant message that
-                        // requested it — and only for calls that actually ran, otherwise some
-                        // servers error out on an unanswered tool_call.
-                        toolEntries.forEach { toolEntry ->
-                            val block = toolEntry.terminal ?: return@forEach
-                            val result = block.result ?: block.output
-                            if (result.isNotBlank()) {
-                                messages += ChatMessage.tool(block.toolCallId, block.toolName, result)
-                            }
-                        }
-                    }
-
-                    index = cursor
-                }
-
-                Role.Tool -> index++ // orphaned tool card (no preceding assistant) — skip
-                Role.System -> index++ // the system prompt is injected by the engine
-            }
-        }
-
-        val trimmed = if (messages.size > MAX_HISTORY_MESSAGES) {
-            messages.subList(messages.size - MAX_HISTORY_MESSAGES, messages.size).toList()
-        } else {
-            messages
-        }
-
-        // The API requires the first message after `system` to be a user message.
-        return trimmed.dropWhile { it.role != ChatMessage.ROLE_USER }
-    }
+    private fun buildApiHistory(entries: List<ChatEntry>): List<ChatMessage> =
+        ApiHistory.build(entries, container.attachmentStore::fileOf)
 
     private fun List<Conversation>.replace(updated: Conversation): List<Conversation> =
         map { if (it.id == updated.id) updated else it }
@@ -941,7 +865,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     private companion object {
         const val TAG = "ChatViewModel"
-        const val MAX_HISTORY_MESSAGES = 40
 
         /**
          * Minimum spacing between mid-turn writes, in milliseconds.

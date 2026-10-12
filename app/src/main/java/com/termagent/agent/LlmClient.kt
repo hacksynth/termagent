@@ -58,6 +58,27 @@ sealed interface LlmEvent {
 }
 
 /**
+ * The streaming seam between [AgentEngine] and the network.
+ *
+ * A named interface rather than a `LlmClient` reference so the agent loop can be driven
+ * by a fake in a JVM test: the loop's contract is "consume [LlmEvent]s, decide what to do
+ * next", and none of that needs HTTP, TLS or an Android runtime. The production
+ * implementation is [LlmClient]; see `AgentEngineTest`, which never touches the network.
+ *
+ * Deliberately no default argument for [tools]: Kotlin forbids an override from repeating a
+ * default, and every caller in the loop passes the tool list explicitly anyway. Public (rather
+ * than internal) only so the public [AgentEngine] constructor can name it without tripping
+ * Kotlin's "public function exposes its internal parameter type" rule.
+ */
+interface LlmStreamer {
+    fun stream(
+        config: ApiConfig,
+        messages: List<ChatMessage>,
+        tools: List<ToolDefinition>?,
+    ): Flow<LlmEvent>
+}
+
+/**
  * Minimal `text/event-stream` client for `POST {baseUrl}/chat/completions`.
  *
  * Uses `okhttp-sse`, so events are framed by the spec rather than by hand-rolled
@@ -74,7 +95,7 @@ sealed interface LlmEvent {
 class LlmClient(
     private val http: OkHttpClient,
     private val context: Context,
-) {
+) : LlmStreamer {
 
     companion object {
         private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
@@ -89,10 +110,10 @@ class LlmClient(
             .build()
     }
 
-    fun stream(
+    override fun stream(
         config: ApiConfig,
         messages: List<ChatMessage>,
-        tools: List<ToolDefinition>? = null,
+        tools: List<ToolDefinition>?,
     ): Flow<LlmEvent> = callbackFlow {
         val payload = ChatRequest(
             model = config.model,

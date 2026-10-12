@@ -162,7 +162,24 @@ AgentEngine.run(config, history)
 ```
 
 Events (`AgentEvent`) are the only channel between the engine and the UI, so the engine is
-testable with a fake `LlmClient`.
+testable with a fake client.
+
+The engine depends on two **interfaces**, not on the concrete tools:
+
+| Seam | Production implementation | Why it exists |
+| --- | --- | --- |
+| `LlmStreamer` | `LlmClient` | The loop consumes `Flow<LlmEvent>`; scripted event lists let a test drive any provider behaviour, including malformed ones. |
+| `AgentToolRunner` | `AgentTools` | Canned `ToolResult`s let a test deliver streamed output without a pty or a filesystem. |
+
+Both are public (not `internal`) only because [AgentEngine] is public and Kotlin forbids a public
+constructor from naming an internal type. `AgentEngineTest` builds both fakes and asserts the loop's
+*protocol* rules — which is where the real risk is: a tool call must be answered by exactly one
+`tool` message, immediately after the assistant message that requested it, or the provider rejects
+the request on some *later* turn. Failures there are otherwise only visible in production.
+
+The engine also takes a `tooManyToolCalls: (Int) -> String` instead of an Android `Context`. It
+needs exactly one translated string, and depending on a `Context` made the whole loop
+uninstantiable in a JVM test.
 
 `AgentEngine` uses `channelFlow` (not `flow`) because tool output is delivered from the
 terminal's **main-thread** callback, where `trySend` is the only safe emission primitive.
@@ -308,8 +325,24 @@ The 80×24 default geometry is replaced as soon as a `TerminalView` attaches and
 
 ## Testing notes
 
-* `:terminal-emulator` ships 19 upstream JUnit tests (`src/test/java`); `unitTests
-  .isReturnDefaultValues = true` is set because the emulator touches `android.util.Log`.
-* `AgentEngine` is designed to take a fake `LlmClient` (an interface-like class with a single
-  `stream()` entry point) so the loop, tool accumulation and history shape can be tested
-  without a network or a shell.
+Everything is a plain JVM test (`testDebugUnitTest`) — no Robolectric, no instrumentation, no
+emulator. That is a deliberate constraint: the suite runs in seconds on the device itself, which is
+the only machine most contributors to this project build on.
+
+* `:terminal-emulator` ships 19 upstream JUnit tests.
+* `unitTests.isReturnDefaultValues = true` is set for `:app` because the tested classes call
+  `android.util.Log` for diagnostics. The caveat is real and worth knowing: it makes *every*
+  unmocked `android.*` call return a default instead of throwing, so a test that accidentally
+  reaches a real Android API will silently pass rather than fail loudly. Keep the classes under
+  test free of Android types, and only `Log` benefits from this.
+* `AgentEngineTest` drives the loop through the `LlmStreamer` / `AgentToolRunner` fakes and asserts
+  the wire protocol (tool-call pairing, the safety switch, the iteration bound, usage summing).
+* `ApiHistoryTest` covers the entry-log → wire-conversation translation, including the two shapes
+  that only occur in practice — a card with no final result, and a trim that cuts into an assistant
+  turn.
+* `$PREFIX`-free by construction: nothing under test touches a terminal, a file or the network.
+
+The suite was validated by **mutation testing**, not just by passing: each rule was disabled in turn
+(drop the leading-user rule; ignore a card's streamed output; stop enforcing the safety switch; stop
+carrying the exit code) and exactly the corresponding test failed each time. Tests that cannot fail
+are worse than no tests, because they buy confidence they have not earned.

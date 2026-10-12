@@ -72,7 +72,11 @@ class AppContainer(context: Context) {
         attachments = { attachmentRegistry.current() },
     )
 
-    val engine: AgentEngine = AgentEngine(llm, tools, context)
+    // The engine takes a string resolver, not a Context: it needs exactly one translated
+    // message, and depending on a Context made the whole agent loop untestable off-device.
+    val engine: AgentEngine = AgentEngine(llm, tools) {
+        context.getString(R.string.error_too_many_tool_calls, it)
+    }
 
     val bootstrap: BootstrapInstaller = BootstrapInstaller(context, environment, http)
 

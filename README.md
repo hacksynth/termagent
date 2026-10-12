@@ -510,8 +510,21 @@ Contributions are welcome — bug reports, fixes, translations and docs all coun
   privately via **[`SECURITY.md`](SECURITY.md)**.
 
 New here? The **provider catalog**, **localization** and **Markdown renderer** are the most
-self-contained places to start — each has a narrow surface and the last one already ships a
-small JVM test suite.
+self-contained places to start — each has a narrow surface and all three ship JVM test suites.
+
+Run the suite with:
+
+```bash
+bash scripts/build-on-termux.sh :app:testDebugUnitTest     # on device
+./gradlew :app:testDebugUnitTest                           # on a workstation
+```
+
+It is 126 plain JVM tests, no emulator needed. The parts that look hardest to test on purpose
+are the parts with the most coverage: the agent loop is driven through two interfaces
+(`LlmStreamer`, `AgentToolRunner`) with scripted events and canned tool results, and the
+entry-log → wire-conversation translation lives in `ApiHistory` as a pure function. If you
+change a rule there, the tests are meant to tell you *which* one you broke — they were checked
+by disabling each rule in turn and watching exactly the matching test fail.
 
 ## Status
 

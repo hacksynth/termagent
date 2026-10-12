@@ -84,6 +84,21 @@ android {
         buildConfig = true
     }
 
+    testOptions {
+        unitTests {
+            /**
+             * Let unmocked `android.*` calls return their defaults instead of throwing.
+             *
+             * The classes under test are deliberately plain Kotlin, but the agent loop still calls
+             * `android.util.Log` for diagnostics. Without this, every JVM test that drives the loop
+             * would fail with "Method d in android.util.Log not mocked" — forcing either Robolectric
+             * (heavy, slow) or removing the logging (worse). Only the `android.jar` stubs are
+             * affected; nothing here touches a real Android runtime.
+             */
+            isReturnDefaultValues = true
+        }
+    }
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
