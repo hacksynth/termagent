@@ -1,0 +1,16 @@
+# Copy this file to `local.properties` and point it at your Android SDK.
+#
+# On a workstation:
+#   sdk.dir=/home/you/Android/Sdk
+#   # Windows: sdk.dir=C\:\\Users\\you\\AppData\\Local\\Android\\Sdk
+#
+# Inside Termux (keep the SDK OUTSIDE the noexec $HOME if possible):
+#   sdk.dir=/data/data/com.termux/files/home/android-sdk
+#
+# Required SDK components:
+#   platform  ;android-36
+#   build-tools;36.0.0
+#   ndk;27.0.12077973        (only used to build jni/termux.c)
+#   cmake;3.22.1
+#
+# sdk.dir=/path/to/Android/Sdk

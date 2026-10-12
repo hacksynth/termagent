@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Vector fallback for API 24/25, which predate adaptive icons. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M18,10 L90,10 A8,8 0 0 1 98,18 L98,90 A8,8 0 0 1 90,98 L18,98 A8,8 0 0 1 10,90 L10,18 A8,8 0 0 1 18,10 Z"
+        android:fillColor="#FF0B0F14" />
+    <path
+        android:pathData="M38,38 L52,54 L38,70"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="7"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M60,70 L76,70"
+        android:strokeColor="#FF4C9AFF"
+        android:strokeWidth="7"
+        android:strokeLineCap="round" />
+</vector>

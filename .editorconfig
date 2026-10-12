@@ -1,0 +1,36 @@
+# Keep editors consistent across contributors — see CONTRIBUTING.md.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+# Kotlin / Java / C / Gradle Kotlin DSL
+[*.{kt,kts,java,c,h}]
+indent_size = 4
+
+# XML (Android resources, manifest)
+[*.xml]
+indent_size = 4
+
+# Gradle Groovy, YAML, JSON
+[*.{gradle,yml,yaml,json}]
+indent_size = 2
+
+# The provider/model tables are machine-generated — do not reformat them.
+[app/src/main/assets/providers/*.json]
+indent_size = 2
+insert_final_newline = false
+trim_trailing_whitespace = false
+
+# Markdown: trailing whitespace is a line break, so leave it alone.
+[*.md]
+trim_trailing_whitespace = false
+
+# Windows batch wrapper keeps CRLF.
+[*.bat]
+end_of_line = crlf

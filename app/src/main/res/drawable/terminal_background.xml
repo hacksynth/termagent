@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Terminal background: opaque so TerminalView can render without blending artifacts. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#FF0D1117" />
+    <corners android:radius="12dp" />
+</shape>

@@ -1,0 +1,41 @@
+# Normalise line endings in the repository (source files are stored with LF),
+# and keep Windows users' checkouts usable.
+* text=auto eol=lf
+
+# Windows batch scripts must keep CRLF.
+*.bat text eol=crlf
+
+# Force LF for the files that matter to the build (shebangs, the Gradle wrapper).
+*.sh            text eol=lf
+gradlew         text eol=lf
+*.kt            text
+*.kts           text
+*.java          text
+*.c             text
+*.h             text
+*.xml           text
+*.json          text
+*.md            text
+*.pro           text
+
+# Never touch these: binary, or too big to diff.
+*.zip   binary
+*.jar   binary
+*.so    binary
+*.apk   binary
+*.aab   binary
+*.dex   binary
+*.png   binary
+*.jpg   binary
+*.ttf   binary
+*.deb   binary
+
+# Keep the generated assets out of diffs shown by `git log -p` for big tables.
+app/src/main/assets/providers/model-limits.json  -diff
+app/src/main/assets/providers/model-pricing.json -diff
+app/src/main/assets/providers/providers.json     -diff
+
+# Language statistics
+*.kt    linguist-language=Kotlin
+*.kts   linguist-language=Kotlin
+*.c     linguist-language=C

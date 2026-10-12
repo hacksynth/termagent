@@ -1,0 +1,61 @@
+# ---------------------------------------------------------------------------
+# Gradle
+# ---------------------------------------------------------------------------
+.gradle/
+build/
+*/build/
+# Keep the wrapper JAR: it is what makes `./gradlew` work without a local
+# Gradle install.
+!gradle/wrapper/gradle-wrapper.jar
+
+# ---------------------------------------------------------------------------
+# Android
+# ---------------------------------------------------------------------------
+local.properties
+*.apk
+*.aab
+*.ap_
+*.dex
+captures/
+.cxx/
+.externalNativeBuild/
+
+# Prebuilt JNI library — compiled by scripts/build-on-termux.sh (or by CMake on a
+# workstation) and therefore never a source file.
+app/src/main/jniLibs/
+
+# Generated native build output
+build-native/
+
+# ---------------------------------------------------------------------------
+# IDE / editor
+# ---------------------------------------------------------------------------
+.idea/
+*.iml
+.kotlin/
+*.swp
+
+# ---------------------------------------------------------------------------
+# OS
+# ---------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+
+# ---------------------------------------------------------------------------
+# Logs and scratch files
+# ---------------------------------------------------------------------------
+*.log
+.tmp_*
+
+# ---------------------------------------------------------------------------
+# Bundled Termux bootstrap
+#
+# ~32 MB, fetched at build time by scripts/build-on-termux.sh from the official
+# termux-packages release and verified by the APK signature. Never commit it.
+# ---------------------------------------------------------------------------
+app/src/main/assets/bootstrap/*.zip
+
+# ---------------------------------------------------------------------------
+# Agent harness / tooling state (not part of the project source)
+# ---------------------------------------------------------------------------
+.devx/

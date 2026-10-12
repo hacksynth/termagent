@@ -1,0 +1,113 @@
+# Changelog
+
+All notable changes to this project are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+> **Note on the version number.** TermAgent is a pre-1.0, sideload-only application.
+> `1.0.0` is reserved for the point at which the bootstrap/package-management layer
+> and the agent loop are considered stable on a representative range of devices.
+> Until then, minor versions may contain breaking changes to the persisted
+> conversation format.
+
+## [Unreleased]
+
+### Added
+
+* Repository open-sourced under **GPL-3.0-only**, with a [`NOTICE`](NOTICE)
+  recording the Termux / jackpal / termux-dev (`devx`) attribution and their
+  licenses.
+* [`CONTRIBUTING.md`](CONTRIBUTING.md), [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md)
+  (Contributor Covenant 2.1) and [`SECURITY.md`](SECURITY.md) describing the threat
+  model.
+
+## [0.1.0] — unreleased
+
+Initial version. Not yet tagged or published; this entry describes the tree as it
+stands at the first public commit.
+
+### Added
+
+**Terminal backend (forked from [`termux/termux-app`](https://github.com/termux/termux-app), GPL-3.0)**
+
+* The `:terminal-emulator` and `:terminal-view` modules, vendored verbatim apart from
+  a modern Gradle setup and a **CMake**-based build of the JNI bridge
+  (`terminal-emulator/src/main/cpp/termux.c` → `libtermux.so`, `forkpty(3)`).
+* Prebuilt-JNI mode (`-Ptermagent.prebuiltJni=true`) so the native bridge can be
+  compiled by Termux's own aarch64 `clang` on the device, where the x86_64-only
+  Google NDK cannot run.
+
+**Bootstrap**
+
+* `BootstrapInstaller` unpacks the **official Termux bootstrap** into app-private
+  storage, in the upstream two-phase way: extract into `usr-staging`, recreate
+  `SYMLINKS.txt` with `Os.symlink()`, `chmod 0700` the executables, then `rename(2)`
+  onto `usr/`.
+* Same-length in-place prefix repointing (`com.termux` → `com.tagent`) across the
+  bootstrap's ELF binaries and script shebangs; `applicationId` length is enforced at
+  build time so the substitution stays byte-exact.
+* The upstream `termux-bootstrap-second-stage.sh` is executed after extraction, so
+  `update-alternatives` links and `termux-exec` are finalised.
+* The session environment mirrors real Termux: `LD_PRELOAD=libtermux-exec-ld-preload.so`,
+  `TERMUX__PREFIX`, `TERMUX__ROOTFS_DIR`, `TERMUX__HOME`, `TERMUX__USER_ID`,
+  `ANDROID__BUILD_VERSION_SDK`, `TMPDIR` inside the prefix.
+* The bootstrap archive is downloaded at build time by
+  [`scripts/build-on-termux.sh`](scripts/build-on-termux.sh) and bundled into the APK,
+  so the first launch installs the shell **offline**.
+
+**Package management (`apt` / `pkg install`)**
+
+* A `DPkg::Pre-Install-Pkgs` apt hook
+  (`$PREFIX/libexec/termagent/repoint-deb` + `apt.conf.d/99-termagent-repoint`) that
+  rewrites downloaded `.deb` archives — and their compiled-in prefix strings — at the
+  app's own package id, making `apt install` / `pkg install` work under a foreign
+  package id for the first time. Re-asserted on every launch for older prefixes.
+
+**Agent**
+
+* `LlmClient`, an OpenAI-compatible **SSE streaming** client on okhttp-sse.
+* `AgentEngine`, the plan → tool call → observe loop, streaming
+  `AgentEvent.{TextDelta, ReasoningDelta, ToolCall, ToolOutput, Usage, …}`.
+* Tools: `run_shell`, `read_file`, `write_file`, `list_dir`, `get_system_info`,
+  gated by a *Settings → Allow command execution* switch that withholds `run_shell`
+  from the model entirely when off.
+* Robust PTY command capture using nonce'd shell-expanded sentinel markers plus the
+  exit status, so echoed commands cannot be mistaken for output; `cd`/`export`/`alias`
+  persist across turns in the shared session.
+* Token accounting and best-effort cost estimation per turn, from the bundled pricing
+  table.
+* Vision: image attachments are downscaled and sent as multimodal content.
+
+**Provider catalog (ported from [`apvcode/Termux-Dev`](https://github.com/apvcode/Termux-Dev), MIT)**
+
+* 178 provider presets, a 6541-entry context-window table and a matching
+  `$/Mtok` pricing table, decoded lazily from JSON assets.
+* `GET {baseUrl}/models` discovery with a searchable model picker, remembered
+  per-provider base URLs and API keys, and per-model context-limit display.
+
+**UI**
+
+* A Miuix/Compose single-activity app: chat transcript, streaming bubbles with a
+  blinking cursor, per-turn usage footer, auto-scrolling terminal cards, session
+  drawer, settings, and an embedded `TerminalView` surface.
+* A full Markdown renderer (headings, nested quotes/lists/task lists, tables, rules,
+  fenced code with copy, inline emphasis/strike/links/clickable URLs) with a JVM
+  unit-test suite for the parser.
+* Localization: English, 简体中文 (`values-zh`) and 繁體中文
+  (`values-b+zh+Hant`), following the Android system language, with
+  `android:localeConfig` for the Android 13+ per-app language picker.
+
+### Known limitations
+
+* `targetSdk = 28` is required for on-device `exec()`; the app is **not** Google Play
+  distributable and must be sideloaded or shipped via F-Droid.
+* The on-device build produces a **single-ABI** (`arm64-v8a`) APK; multi-ABI builds
+  require a workstation with a real NDK.
+* The bootstrap is arm64-only.
+* API keys are stored unencrypted in `SharedPreferences` — see
+  [`SECURITY.md`](SECURITY.md).
+* Cost figures are estimates from a static table, not billed amounts.
+
+[Unreleased]: https://github.com/OWNER/termagent/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/OWNER/termagent/releases/tag/v0.1.0

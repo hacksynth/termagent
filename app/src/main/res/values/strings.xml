@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Default (English) string catalogue.
+
+    Everything the user can read lives here; the code never hardcodes UI text. Two rules apply
+    throughout:
+
+    * strings fed to the *model* (tool descriptions, tool-result errors) are deliberately NOT
+      here — they are part of the wire protocol and must stay English. See AgentTools/AgentEngine.
+    * anything with a format argument uses positional placeholders (%1$s), so a translation may
+      reorder them.
+-->
+<resources>
+
+    <!-- ============================================================ brand -->
+    <string name="app_name">TermAgent</string>
+    <string name="brand_tagline">AI shell agent</string>
+
+    <!-- ============================================================ generic -->
+    <string name="common_back">Back</string>
+    <string name="common_dismiss">Dismiss</string>
+
+    <!-- ============================================================ chat -->
+    <string name="chat_untitled">New chat</string>
+    <string name="chat_open_sidebar">Open sidebar</string>
+    <string name="chat_new_chat">New chat</string>
+    <string name="chat_settings">Settings</string>
+    <string name="chat_working">working…</string>
+    <string name="chat_thinking">TermAgent is thinking…</string>
+
+    <string name="chat_empty_title">What should I run?</string>
+    <string name="chat_empty_body">TermAgent executes real shell commands in a Termux (bash) PTY on this device and streams the output back as it runs.</string>
+    <string name="chat_suggestion_list_files">list the files in my home directory</string>
+    <string name="chat_suggestion_disk_space">check how much disk space is left</string>
+    <string name="chat_suggestion_processes">show running processes and memory usage</string>
+    <string name="chat_suggestion_script">write a python script that renames images by date</string>
+
+    <string name="chat_onboarding_title">Connect a model</string>
+    <string name="chat_onboarding_body">TermAgent drives shell commands through an OpenAI-compatible endpoint. Add a base URL, API key and model to get started — a local server (Ollama, llama.cpp, vLLM) works too.</string>
+    <string name="chat_open_settings">Open settings</string>
+
+    <!-- ============================================================ composer -->
+    <string name="composer_placeholder">Ask TermAgent to run something…</string>
+    <string name="composer_send">Send</string>
+    <string name="composer_stop">Stop</string>
+    <string name="composer_enter_to_send">Enter to send</string>
+    <string name="composer_shell_missing">Install the shell environment to enable command execution.</string>
+
+    <!-- ============================================================ attachments -->
+    <string name="attach_open">Add attachment</string>
+    <string name="attach_photos">Photos</string>
+    <string name="attach_photos_hint">Pick one or more images from your gallery.</string>
+    <string name="attach_files">Files</string>
+    <string name="attach_files_hint">Any document: text, code, logs, PDFs, archives.</string>
+    <string name="attach_remove">Remove attachment</string>
+    <string name="attach_importing">Preparing attachments…</string>
+    <string name="attach_pending_count">%1$d file(s) will be sent with your message</string>
+    <string name="error_attachments_failed">%1$d attachments could not be added.</string>
+    <string name="message_attachment_image">Attached image</string>
+    <string name="message_attachment_file">Attached file</string>
+    <string name="message_attachment_missing">(file is no longer available)</string>
+    <string name="attachment_view_fullscreen">View image</string>
+    <string name="attachment_view_close">Close image</string>
+    <string name="attachment_dimensions">%1$d × %2$d</string>
+
+    <!-- ============================================================ bootstrap -->
+    <string name="bootstrap_title">Shell environment</string>
+    <string name="bootstrap_failed">Setting up the shell failed: %1$s</string>
+    <string name="bootstrap_unpacking">Unpacking the bundled Termux shell (bash, coreutils, apt, …) into the app\'s private storage. This happens once, needs no network, and takes a few seconds.</string>
+    <string name="bootstrap_installed">Installed.</string>
+    <string name="bootstrap_retry">Try again</string>
+    <string name="bootstrap_configure_model_first">Configure a model first</string>
+    <string name="bootstrap_footnote">Bundled Termux bootstrap for %1$s, unpacked into the app\'s private files/usr. No network required.</string>
+
+    <!-- bootstrap install progress (rendered by ChatViewModel) -->
+    <string name="bootstrap_starting">Starting…</string>
+    <string name="bootstrap_preparing">Preparing bundled shell…</string>
+    <string name="bootstrap_preparing_percent">Preparing… %1$d%%</string>
+    <string name="bootstrap_downloading">Downloading… %1$d MB</string>
+    <string name="bootstrap_downloading_total">Downloading… %1$d / %2$d MB</string>
+    <string name="bootstrap_extracting">Extracting… %1$d files</string>
+    <string name="bootstrap_linking">Creating symlinks…</string>
+    <string name="bootstrap_patching">Fixing paths…</string>
+    <string name="bootstrap_configuring">Configuring packages…</string>
+    <string name="bootstrap_finishing">Finishing…</string>
+    <string name="bootstrap_failed_prefix">Failed: %1$s</string>
+
+    <!-- ============================================================ errors -->
+    <string name="error_unknown">Unknown error</string>
+    <string name="error_request_failed">Request failed</string>
+    <string name="error_no_models">The provider returned no models.</string>
+    <string name="error_too_many_tool_calls">Stopped after %1$d tool iterations without a final answer.</string>
+
+    <!-- ============================================================ messages -->
+    <string name="message_agent_name">TermAgent</string>
+    <string name="message_copy">Copy message</string>
+    <string name="message_no_response">(no response)</string>
+    <string name="message_usage">%1$d in / %2$d out</string>
+    <string name="message_usage_cost">%1$s  ·  %2$s</string>
+    <string name="message_reasoning">Thinking</string>
+    <string name="message_reasoning_chars">Thinking (%1$d chars)</string>
+    <string name="message_reasoning_show">Show reasoning</string>
+    <string name="message_reasoning_hide">Hide reasoning</string>
+    <string name="message_code">code</string>
+    <string name="message_copy_code">Copy code</string>
+
+    <!-- ============================================================ terminal card -->
+    <string name="terminal_running">running…</string>
+    <string name="terminal_no_output">(no output)</string>
+    <string name="terminal_exit_code">exit %1$d</string>
+    <string name="terminal_copy_command">Copy command</string>
+    <string name="terminal_expand">Expand</string>
+    <string name="terminal_collapse">Collapse</string>
+
+    <!-- ============================================================ drawer -->
+    <string name="drawer_shell_ready">shell ready</string>
+    <string name="drawer_shell_missing">shell not installed</string>
+    <string name="drawer_new_chat">New chat</string>
+    <string name="drawer_chats">CHATS</string>
+    <string name="drawer_terminal">Terminal</string>
+    <string name="drawer_settings">Settings</string>
+    <string name="drawer_delete_chat">Delete chat</string>
+
+    <!-- ============================================================ terminal screen -->
+    <string name="terminal_title">Terminal</string>
+    <string name="terminal_subtitle">live PTY · shared with the agent</string>
+    <string name="terminal_keyboard">Keyboard</string>
+    <string name="terminal_missing_title">The shell is not installed yet</string>
+    <string name="terminal_missing_body">This tab renders the same live PTY that the agent runs commands in. Install the Termux bootstrap from the chat screen first, then come back here to use bash directly. No API key is needed for this.</string>
+
+    <!-- ============================================================ settings -->
+    <string name="settings_title">Settings</string>
+
+    <string name="settings_provider_section">Provider</string>
+    <string name="settings_provider">Provider</string>
+    <string name="settings_provider_note">%1$d presets bundled — base URL and API key are kept per provider and restored when you switch back.</string>
+
+    <string name="settings_endpoint_section">Model endpoint</string>
+    <string name="settings_base_url">Base URL</string>
+    <string name="settings_api_key">API key</string>
+    <string name="settings_model">Model</string>
+    <string name="settings_fetch">Fetch</string>
+    <string name="settings_choose_models">Choose from %1$d models</string>
+    <string name="settings_browse_models">Browse models</string>
+    <string name="settings_context_window">Context window</string>
+    <string name="settings_tokens">%1$d tokens</string>
+    <string name="settings_temperature">Temperature</string>
+    <string name="settings_max_tokens">Max tokens</string>
+    <string name="settings_system_prompt">Custom system prompt (optional)</string>
+    <string name="settings_system_prompt_hint">Leave empty to use the built-in agent prompt</string>
+    <string name="settings_endpoint_note">Works with any OpenAI-compatible server. Local endpoints (http://127.0.0.1:11434/v1) need no API key.</string>
+
+    <string name="settings_safety_section">Safety</string>
+    <string name="settings_allow_execution">Allow command execution</string>
+    <string name="settings_allow_execution_note">When off, the agent can only read and write files — run_shell is not offered to the model.</string>
+
+    <string name="settings_backend_section">Shell backend</string>
+    <string name="settings_bootstrap">Bootstrap</string>
+    <string name="settings_bootstrap_installed">installed</string>
+    <string name="settings_bootstrap_error">error — %1$s</string>
+    <string name="settings_bootstrap_not_installed">not installed</string>
+    <string name="settings_backend_note">The backend is a forked Termux build (terminal-emulator + terminal-view) running a real PTY. Commands execute in a persistent bash session, so cwd, exports and aliases carry over between turns.</string>
+
+    <string name="settings_appearance_section">Appearance</string>
+    <string name="settings_data_section">Data</string>
+    <string name="settings_delete_all">Delete all conversations</string>
+    <string name="settings_delete_all_note">Removes every saved chat from private storage.</string>
+    <string name="settings_about">termagent %1$s · PTY backend forked from Termux (GPL-3.0) · provider catalog ported from termux-dev</string>
+
+    <string name="settings_select_provider">Select provider</string>
+    <string name="settings_select_model">Select model</string>
+    <string name="settings_filter">Filter</string>
+    <string name="settings_search_providers">Search %1$d providers…</string>
+    <string name="settings_search_models">Search %1$d models…</string>
+    <string name="settings_custom_endpoint">custom endpoint</string>
+
+    <!-- ============================================================ theme -->
+    <string name="theme_dark">Dark</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_system">Follow system</string>
+    <string name="theme_monet_dark">Monet (wallpaper, dark)</string>
+    <string name="theme_monet_light">Monet (wallpaper, light)</string>
+
+    <string name="settings_color_scheme">Color scheme</string>
+    <string name="settings_theme_style">Theme style</string>
+    <string name="settings_theme_style_note">Style and color scheme combine — pick DeepSeek with Light or Dark above. Monet modes follow your wallpaper, so a style cannot tint them.</string>
+    <string name="theme_style_default">Default</string>
+    <string name="theme_style_deepseek">DeepSeek</string>
+
+    <!-- ============================================================ relative time -->
+    <string name="time_just_now">just now</string>
+    <string name="time_minutes_ago">%1$d min ago</string>
+    <string name="time_hours_ago">%1$d h ago</string>
+    <string name="time_days_ago">%1$d d ago</string>
+
+</resources>

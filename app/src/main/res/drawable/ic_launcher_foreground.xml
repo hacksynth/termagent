@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- ">_" shell prompt -->
+    <path
+        android:pathData="M38,38 L52,54 L38,70"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="7"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M60,70 L76,70"
+        android:strokeColor="#FF4C9AFF"
+        android:strokeWidth="7"
+        android:strokeLineCap="round" />
+</vector>

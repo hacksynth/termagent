@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    简体中文（zh-Hans）。
+
+    术语约定：
+      shell → shell（不译，指 POSIX shell 本身）
+      PTY / bootstrap / provider / token → 保留英文
+      Termux / TermAgent / run_shell → 专有名词，保留原文
+    占位符（%1$s / %1$d）可依语序调整位置。
+-->
+<resources>
+
+    <!-- ============================================================ brand -->
+    <string name="brand_tagline">AI shell 智能体</string>
+
+    <!-- ============================================================ generic -->
+    <string name="common_back">返回</string>
+    <string name="common_dismiss">忽略</string>
+
+    <!-- ============================================================ chat -->
+    <string name="chat_untitled">新对话</string>
+    <string name="chat_open_sidebar">打开侧边栏</string>
+    <string name="chat_new_chat">新对话</string>
+    <string name="chat_settings">设置</string>
+    <string name="chat_working">处理中…</string>
+    <string name="chat_thinking">TermAgent 正在思考…</string>
+
+    <string name="chat_empty_title">想执行点什么？</string>
+    <string name="chat_empty_body">TermAgent 会在本机的 Termux（bash）PTY 中执行真实的 shell 命令，并实时回传输出。</string>
+    <string name="chat_suggestion_list_files">列出我主目录里的文件</string>
+    <string name="chat_suggestion_disk_space">查看还剩多少磁盘空间</string>
+    <string name="chat_suggestion_processes">显示运行中的进程和内存占用</string>
+    <string name="chat_suggestion_script">写一个按日期重命名图片的 python 脚本</string>
+
+    <string name="chat_onboarding_title">接入一个模型</string>
+    <string name="chat_onboarding_body">TermAgent 通过 OpenAI 兼容接口驱动 shell 命令。填入 Base URL、API Key 和模型即可开始——本地服务（Ollama、llama.cpp、vLLM）同样可用。</string>
+    <string name="chat_open_settings">打开设置</string>
+
+    <!-- ============================================================ composer -->
+    <string name="composer_placeholder">让 TermAgent 执行点什么…</string>
+    <string name="composer_send">发送</string>
+    <string name="composer_stop">停止</string>
+    <string name="composer_enter_to_send">回车发送</string>
+    <string name="composer_shell_missing">安装 shell 环境后才能执行命令。</string>
+
+    <!-- ============================================================ attachments -->
+    <string name="attach_open">添加附件</string>
+    <string name="attach_photos">相册</string>
+    <string name="attach_photos_hint">从相册选择一张或多张图片。</string>
+    <string name="attach_files">文件</string>
+    <string name="attach_files_hint">任意文档：文本、代码、日志、PDF、压缩包。</string>
+    <string name="attach_remove">移除附件</string>
+    <string name="attach_importing">正在准备附件…</string>
+    <string name="attach_pending_count">%1$d 个文件将随消息一起发送</string>
+    <string name="error_attachments_failed">有 %1$d 个附件添加失败。</string>
+    <string name="message_attachment_image">附图</string>
+    <string name="message_attachment_file">附件</string>
+    <string name="message_attachment_missing">（文件已不存在）</string>
+    <string name="attachment_view_fullscreen">查看图片</string>
+    <string name="attachment_view_close">关闭图片</string>
+    <string name="attachment_dimensions">%1$d × %2$d</string>
+
+    <!-- ============================================================ bootstrap -->
+    <string name="bootstrap_title">Shell 环境</string>
+    <string name="bootstrap_failed">shell 环境安装失败：%1$s</string>
+    <string name="bootstrap_unpacking">正在把内置的 Termux shell（bash、coreutils、apt……）解包到应用的私有存储中。只需一次，无需联网，几秒钟即可完成。</string>
+    <string name="bootstrap_installed">已安装。</string>
+    <string name="bootstrap_retry">重试</string>
+    <string name="bootstrap_configure_model_first">先去配置模型</string>
+    <string name="bootstrap_footnote">随 APK 内置的 Termux bootstrap（%1$s），解包到应用私有的 files/usr 目录。全程无需联网。</string>
+
+    <string name="bootstrap_starting">正在启动…</string>
+    <string name="bootstrap_preparing">正在准备内置 shell…</string>
+    <string name="bootstrap_preparing_percent">正在准备… %1$d%%</string>
+    <string name="bootstrap_downloading">正在下载… %1$d MB</string>
+    <string name="bootstrap_downloading_total">正在下载… %1$d / %2$d MB</string>
+    <string name="bootstrap_extracting">正在解包… %1$d 个文件</string>
+    <string name="bootstrap_linking">正在创建软链接…</string>
+    <string name="bootstrap_patching">正在修正路径…</string>
+    <string name="bootstrap_configuring">正在配置软件包…</string>
+    <string name="bootstrap_finishing">正在收尾…</string>
+    <string name="bootstrap_failed_prefix">失败：%1$s</string>
+
+    <!-- ============================================================ errors -->
+    <string name="error_unknown">未知错误</string>
+    <string name="error_request_failed">请求失败</string>
+    <string name="error_no_models">服务商没有返回任何模型。</string>
+    <string name="error_too_many_tool_calls">连续 %1$d 轮工具调用仍未给出最终答案，已停止。</string>
+
+    <!-- ============================================================ messages -->
+    <string name="message_agent_name">TermAgent</string>
+    <string name="message_copy">复制消息</string>
+    <string name="message_no_response">（无回复）</string>
+    <string name="message_usage">输入 %1$d / 输出 %2$d</string>
+    <string name="message_usage_cost">%1$s  ·  %2$s</string>
+    <string name="message_reasoning">思考过程</string>
+    <string name="message_reasoning_chars">思考过程（%1$d 字）</string>
+    <string name="message_reasoning_show">展开思考过程</string>
+    <string name="message_reasoning_hide">收起思考过程</string>
+    <string name="message_code">代码</string>
+    <string name="message_copy_code">复制代码</string>
+
+    <!-- ============================================================ terminal card -->
+    <string name="terminal_running">运行中…</string>
+    <string name="terminal_no_output">（无输出）</string>
+    <string name="terminal_exit_code">退出码 %1$d</string>
+    <string name="terminal_copy_command">复制命令</string>
+    <string name="terminal_expand">展开</string>
+    <string name="terminal_collapse">收起</string>
+
+    <!-- ============================================================ drawer -->
+    <string name="drawer_shell_ready">shell 就绪</string>
+    <string name="drawer_shell_missing">shell 未安装</string>
+    <string name="drawer_new_chat">新对话</string>
+    <string name="drawer_chats">对话</string>
+    <string name="drawer_terminal">终端</string>
+    <string name="drawer_settings">设置</string>
+    <string name="drawer_delete_chat">删除对话</string>
+
+    <!-- ============================================================ terminal screen -->
+    <string name="terminal_title">终端</string>
+    <string name="terminal_subtitle">实时 PTY · 与智能体共用</string>
+    <string name="terminal_keyboard">键盘</string>
+    <string name="terminal_missing_title">shell 环境尚未安装</string>
+    <string name="terminal_missing_body">此标签页渲染的是智能体执行命令所用的同一个实时 PTY。请先在对话页安装 Termux bootstrap，再回到这里直接使用 bash。此功能不需要 API Key。</string>
+
+    <!-- ============================================================ settings -->
+    <string name="settings_title">设置</string>
+
+    <string name="settings_provider_section">服务商</string>
+    <string name="settings_provider">服务商</string>
+    <string name="settings_provider_note">内置 %1$d 个预设——Base URL 与 API Key 按服务商分别保存，切回时自动恢复。</string>
+
+    <string name="settings_endpoint_section">模型接入点</string>
+    <string name="settings_base_url">Base URL</string>
+    <string name="settings_api_key">API Key</string>
+    <string name="settings_model">模型</string>
+    <string name="settings_fetch">获取</string>
+    <string name="settings_choose_models">从 %1$d 个模型中选择</string>
+    <string name="settings_browse_models">浏览模型</string>
+    <string name="settings_context_window">上下文窗口</string>
+    <string name="settings_tokens">%1$d tokens</string>
+    <string name="settings_temperature">温度</string>
+    <string name="settings_max_tokens">最大输出 tokens</string>
+    <string name="settings_system_prompt">自定义系统提示词（可选）</string>
+    <string name="settings_system_prompt_hint">留空则使用内置的智能体提示词</string>
+    <string name="settings_endpoint_note">适用于任何 OpenAI 兼容服务。本地接入点（http://127.0.0.1:11434/v1）无需 API Key。</string>
+
+    <string name="settings_safety_section">安全</string>
+    <string name="settings_allow_execution">允许执行命令</string>
+    <string name="settings_allow_execution_note">关闭后智能体只能读写文件——不会向模型提供 run_shell 工具。</string>
+
+    <string name="settings_backend_section">Shell 后端</string>
+    <string name="settings_bootstrap">Bootstrap</string>
+    <string name="settings_bootstrap_installed">已安装</string>
+    <string name="settings_bootstrap_error">出错 — %1$s</string>
+    <string name="settings_bootstrap_not_installed">未安装</string>
+    <string name="settings_backend_note">后端是 fork 自 Termux 的构建（terminal-emulator + terminal-view），运行着真正的 PTY。命令在一个常驻 bash 会话中执行，因此工作目录、环境变量和别名会在多轮之间保留。</string>
+
+    <string name="settings_appearance_section">外观</string>
+    <string name="settings_data_section">数据</string>
+    <string name="settings_delete_all">删除全部对话</string>
+    <string name="settings_delete_all_note">从私有存储中移除所有已保存的对话。</string>
+    <string name="settings_about">termagent %1$s · PTY 后端 fork 自 Termux（GPL-3.0）· 服务商目录移植自 termux-dev</string>
+
+    <string name="settings_select_provider">选择服务商</string>
+    <string name="settings_select_model">选择模型</string>
+    <string name="settings_filter">筛选</string>
+    <string name="settings_search_providers">搜索 %1$d 个服务商…</string>
+    <string name="settings_search_models">搜索 %1$d 个模型…</string>
+    <string name="settings_custom_endpoint">自定义接入点</string>
+
+    <!-- ============================================================ theme -->
+    <string name="theme_dark">深色</string>
+    <string name="theme_light">浅色</string>
+    <string name="theme_system">跟随系统</string>
+    <string name="theme_monet_dark">莫奈取色（壁纸，深色）</string>
+    <string name="theme_monet_light">莫奈取色（壁纸，浅色）</string>
+
+    <string name="settings_color_scheme">色彩模式</string>
+    <string name="settings_theme_style">主题风格</string>
+    <string name="settings_theme_style_note">风格与色彩模式相互独立——选择 DeepSeek 后，再在上方选择浅色或深色。莫奈取色跟随壁纸，无法套用品牌配色。</string>
+    <string name="theme_style_default">默认</string>
+    <string name="theme_style_deepseek">DeepSeek</string>
+
+    <!-- ============================================================ relative time -->
+    <string name="time_just_now">刚刚</string>
+    <string name="time_minutes_ago">%1$d 分钟前</string>
+    <string name="time_hours_ago">%1$d 小时前</string>
+    <string name="time_days_ago">%1$d 天前</string>
+
+</resources>

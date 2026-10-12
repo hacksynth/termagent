@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- termagent is a dark-first, ChatGPT-desktop-like UI. -->
+    <style name="Theme.TermAgent" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/agent_background</item>
+        <item name="android:forceDarkAllowed">false</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+    </style>
+</resources>

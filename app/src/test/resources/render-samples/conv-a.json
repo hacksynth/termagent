@@ -1,0 +1,56 @@
+{
+    "id": "6e7bd162-42dc-4e28-81b3-99b15963b611",
+    "title": "你好",
+    "createdAt": 1791782113762,
+    "updatedAt": 1791782120633,
+    "entries": [
+        {
+            "id": "8b96702a-4311-4cb5-b05c-c4acd8d7e5d8",
+            "role": "User",
+            "text": "你好",
+            "reasoning": "",
+            "terminal": null,
+            "isStreaming": false,
+            "timestamp": 1791782117071,
+            "promptTokens": 0,
+            "completionTokens": 0,
+            "costUsd": 0.0,
+            "error": null
+        },
+        {
+            "id": "60c402f6-140f-44ce-a53d-5533438dfc6e",
+            "role": "Assistant",
+            "text": "你好！我是 TermAgent，一个跑在你手机上的 shell 智能体。\n\n当前环境：\n\n| 项 | 值 |\n|---|---|\n| 设备 | vivo V2505A (arm64-v8a) |\n| Android | 16 / SDK 36 |\n| Shell | bash @ `$PREFIX` |\n| HOME | `/data/data/com.tagent/files/home` |\n\n我可以直接执行命令、读写文件、装包（`apt`/`pip`/`npm`）、跑脚本、写代码、查日志等。\n\n需要我做点什么？比如：\n\n- 看目录 / 找文件\n- 写个小脚本或 Python 程序\n- 用 git clone 个仓库\n- 做文本处理、批量重命名、压缩打包\n\n告诉我目标就行。",
+            "reasoning": "Respond briefly in Chinese with environment summary and ask what to do.",
+            "terminal": null,
+            "isStreaming": false,
+            "timestamp": 1791782118728,
+            "promptTokens": 2636,
+            "completionTokens": 327,
+            "costUsd": 4.6060000000000003E-4,
+            "error": null
+        },
+        {
+            "id": "6b877322-8dc5-49e8-aea1-235a5aa18b94",
+            "role": "Tool",
+            "text": "",
+            "reasoning": "",
+            "terminal": {
+                "toolCallId": "call_00_qwyoXC95G63mjKydH8IZ9091",
+                "toolName": "get_system_info",
+                "command": "{}",
+                "arguments": "{}",
+                "output": "prefix: /data/data/com.tagent/files/usr\nhome: /data/data/com.tagent/files/home\nshell: /data/data/com.tagent/files/usr/bin/bash\nbootstrap_installed: true\nabi: arm64-v8a\nandroid_sdk: 36\nandroid_release: 16\ndevice: vivo V2505A",
+                "result": "prefix: /data/data/com.tagent/files/usr\nhome: /data/data/com.tagent/files/home\nshell: /data/data/com.tagent/files/usr/bin/bash\nbootstrap_installed: true\nabi: arm64-v8a\nandroid_sdk: 36\nandroid_release: 16\ndevice: vivo V2505A",
+                "exitCode": null,
+                "status": "Succeeded"
+            },
+            "isStreaming": false,
+            "timestamp": 1791782118729,
+            "promptTokens": 0,
+            "completionTokens": 0,
+            "costUsd": 0.0,
+            "error": null
+        }
+    ]
+}

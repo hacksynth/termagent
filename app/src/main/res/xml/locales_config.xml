@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Locales this app ships translations for.
+
+    `android:localeConfig` (Android 13+) makes these appear in the system's per-app language
+    picker, so a user can pick a language *for this app* independently of the system — and can
+    also see which languages are available at all.
+
+    The app still follows the system language by default; this file only advertises what is
+    supported. `zh-Hans`/`zh-Hant` are declared as BCP 47 tags on purpose: they select
+    `values-zh/` and `values-b+zh+Hant/` respectively, and `zh-Hant` covers Taiwan, Hong Kong
+    and Macau without a separate directory per region.
+-->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="en" />
+    <locale android:name="zh-Hans" />
+    <locale android:name="zh-Hant" />
+</locale-config>
