@@ -28,6 +28,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
@@ -56,6 +59,9 @@ fun TerminalCard(
 ) {
     val palette = TermAgentTheme.colors
     val clipboard = LocalClipboardManager.current
+
+    // What the agent is doing, devx-style: `→ Run: npm install`, `→ Read /path/to/file`.
+    val action = rememberToolAction(block.toolName, block.arguments, block.command)
 
     // Expanded while running so the user watches the command work; collapsible afterwards.
     var expanded by remember(block.toolCallId) { mutableStateOf(true) }
@@ -89,7 +95,13 @@ fun TerminalCard(
             Spacer(Modifier.width(Spacing.sm))
 
             Text(
-                text = "$ ${block.command.ifBlank { block.toolName }}",
+                text = buildAnnotatedString {
+                    withStyle(SpanStyle(color = palette.textFaint)) {
+                        append(TOOL_ACTION_ARROW)
+                        append(' ')
+                    }
+                    append(action.label)
+                },
                 modifier = Modifier.weight(1f),
                 color = palette.terminalText,
                 fontFamily = TerminalFontFamily,
@@ -108,18 +120,23 @@ fun TerminalCard(
                 Spacer(Modifier.width(Spacing.xs))
             }
 
-            IconButton(
-                onClick = { clipboard.setText(AnnotatedString(block.command)) },
-                minWidth = 32.dp,
-                minHeight = 32.dp,
-                backgroundColor = Color.Transparent,
-            ) {
-                Icon(
-                    imageVector = MiuixIcons.Regular.Copy,
-                    contentDescription = stringResource(R.string.terminal_copy_command),
-                    modifier = Modifier.size(16.dp),
-                    tint = palette.textSecondary,
-                )
+            // Copies what the label refers to — the command for a shell call, the path for a
+            // file tool — instead of the raw argument JSON. Tools with no such payload (e.g.
+            // `list_attachments`) hide the button rather than offering a useless copy.
+            if (action.copyText != null) {
+                IconButton(
+                    onClick = { clipboard.setText(AnnotatedString(action.copyText)) },
+                    minWidth = 32.dp,
+                    minHeight = 32.dp,
+                    backgroundColor = Color.Transparent,
+                ) {
+                    Icon(
+                        imageVector = MiuixIcons.Regular.Copy,
+                        contentDescription = stringResource(R.string.terminal_copy),
+                        modifier = Modifier.size(16.dp),
+                        tint = palette.textSecondary,
+                    )
+                }
             }
 
             IconButton(

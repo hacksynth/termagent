@@ -129,6 +129,8 @@ CHANGELOG.md                 # Keep a Changelog
 5. `ShellManager` writes `ls -la ~` into the **persistent PTY** and derives the output from the
    emulator's scrollback. Every new slice is emitted as `AgentEvent.ToolOutput`.
 6. The UI appends those slices to a **terminal card**, which auto-scrolls like a real terminal.
+   Its header names the action — `→ Run: ls -la ~`, `→ Read /path/to/file` — rather than
+   echoing the arguments, following the `devx` CLI's convention.
 7. The exit status is captured, the result is fed back to the model as a `tool` message, and
    the loop repeats until the model answers with no tool calls.
 

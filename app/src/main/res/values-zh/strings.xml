@@ -104,9 +104,27 @@
     <string name="terminal_running">运行中…</string>
     <string name="terminal_no_output">（无输出）</string>
     <string name="terminal_exit_code">退出码 %1$d</string>
-    <string name="terminal_copy_command">复制命令</string>
+    <string name="terminal_copy">复制</string>
     <string name="terminal_expand">展开</string>
     <string name="terminal_collapse">收起</string>
+
+    <!-- ============================================================ tool actions -->
+    <string name="tool_action_run">运行：%1$s</string>
+    <string name="tool_action_read">读取 %1$s</string>
+    <string name="tool_action_write">写入 %1$s</string>
+    <string name="tool_action_edit">编辑 %1$s</string>
+    <string name="tool_action_delete">删除 %1$s</string>
+    <string name="tool_action_mkdir">新建目录 %1$s</string>
+    <string name="tool_action_list">列出 %1$s</string>
+    <string name="tool_action_search">在 %2$s 中搜索“%1$s”</string>
+    <string name="tool_action_look">查看 %1$s</string>
+    <string name="tool_action_system_info">系统信息</string>
+    <string name="tool_action_attachments">列出附件</string>
+    <string name="tool_action_clarify">正在询问…</string>
+    <string name="tool_action_todo">更新计划与任务</string>
+    <string name="tool_action_plan">确定计划</string>
+    <string name="tool_action_other">正在执行 %1$s…</string>
+    <string name="tool_action_pending">…</string>
 
     <!-- ============================================================ drawer -->
     <string name="drawer_shell_ready">shell 就绪</string>

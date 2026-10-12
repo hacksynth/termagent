@@ -22,6 +22,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (Contributor Covenant 2.1) and [`SECURITY.md`](SECURITY.md) describing the threat
   model.
 
+### Changed
+
+* **Terminal cards now name the action instead of dumping arguments.** The header
+  reads `→ Run: ls -la ~`, `→ Read /path/to/file`, `→ List ~`, `→ Look at shot.png`
+  — the same shape `devx` prints before it runs a tool
+  (`dist/core/loop.js:getActionDescription()`). Previously a non-shell tool fell back
+  to a truncated `{"path":"…"}` blob, which told the user nothing. The verb table
+  accepts `devx`'s aliases (`bash`, `ls`, `patch`, `view_file`, …), so it keeps
+  working if a provider or MCP server uses different names. The copy button now
+  copies what the label refers to (the command, the path) rather than the raw JSON,
+  and is hidden for tools that have no such payload. Labels are resolved in the UI
+  from the stored arguments, never persisted, so a conversation re-renders in
+  whichever language the app is currently running in.
+
 ## [0.1.0] — unreleased
 
 Initial version. Not yet tagged or published; this entry describes the tree as it

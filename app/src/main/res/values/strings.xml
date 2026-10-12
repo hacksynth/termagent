@@ -108,9 +108,31 @@
     <string name="terminal_running">running…</string>
     <string name="terminal_no_output">(no output)</string>
     <string name="terminal_exit_code">exit %1$d</string>
-    <string name="terminal_copy_command">Copy command</string>
+    <string name="terminal_copy">Copy</string>
     <string name="terminal_expand">Expand</string>
     <string name="terminal_collapse">Collapse</string>
+
+    <!-- ============================================================ tool actions
+         The header of a terminal card names the action the agent is taking, in the style
+         devx uses in its CLI (`→ Run: npm install`). The arrow is added in code, so these
+         hold only the verb and its target. `_pending` stands in for a target the model
+         left out: a bare "Read" beats a dangling "Read". -->
+    <string name="tool_action_run">Run: %1$s</string>
+    <string name="tool_action_read">Read %1$s</string>
+    <string name="tool_action_write">Write %1$s</string>
+    <string name="tool_action_edit">Edit %1$s</string>
+    <string name="tool_action_delete">Delete %1$s</string>
+    <string name="tool_action_mkdir">Make directory %1$s</string>
+    <string name="tool_action_list">List %1$s</string>
+    <string name="tool_action_search">Search “%1$s” in %2$s</string>
+    <string name="tool_action_look">Look at %1$s</string>
+    <string name="tool_action_system_info">System info</string>
+    <string name="tool_action_attachments">List attachments</string>
+    <string name="tool_action_clarify">Asking questions…</string>
+    <string name="tool_action_todo">Update plan &amp; tasks</string>
+    <string name="tool_action_plan">Finalize plan</string>
+    <string name="tool_action_other">Executing %1$s…</string>
+    <string name="tool_action_pending">…</string>
 
     <!-- ============================================================ drawer -->
     <string name="drawer_shell_ready">shell ready</string>
