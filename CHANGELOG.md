@@ -109,5 +109,5 @@ stands at the first public commit.
   [`SECURITY.md`](SECURITY.md).
 * Cost figures are estimates from a static table, not billed amounts.
 
-[Unreleased]: https://github.com/OWNER/termagent/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/OWNER/termagent/releases/tag/v0.1.0
+[Unreleased]: https://github.com/hacksynth/termagent/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/hacksynth/termagent/releases/tag/v0.1.0

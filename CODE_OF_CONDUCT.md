@@ -60,9 +60,7 @@ representative at an online or offline event.
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
 reported to the community leaders responsible for enforcement at
-**`CODE_OF_CONDUCT_CONTACT`** (maintainers: replace this with a monitored
-address before publishing, or delete this paragraph and rely on the private
-reporting channel below).
+**<hacksynth@outlook.com>**.
 
 All complaints will be reviewed and investigated promptly and fairly.
 
@@ -71,7 +69,7 @@ reporter of any incident.
 
 If you would rather not use email, GitHub's **Report abuse** form on the profile or
 comment in question reaches GitHub's own trust & safety team, and the maintainers
-can be reached privately through a repository issue marked confidential, or via a
+can also be reached privately through a
 [private security advisory](../../security/advisories/new).
 
 ## Enforcement Guidelines
